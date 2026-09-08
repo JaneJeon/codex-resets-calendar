@@ -29,7 +29,7 @@ function pastResetEvent(reset) {
   const isBanked = reset.reset_type === 'banked'
   return {
     uid: `${reset.id}@${DOMAIN}`,
-    summary: isBanked ? 'Codex BANKED reset' : 'Codex reset',
+    summary: isBanked ? 'Codex reset (banked)' : 'Codex reset',
     categories: [reset.reset_type],
     description: reset.source?.url,
     url: reset.source?.url,

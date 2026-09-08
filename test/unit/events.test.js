@@ -54,7 +54,7 @@ describe('buildEvents', () => {
     expect(regular.categories).toEqual(['regular'])
     expect(regular.summary).toBe('Codex reset')
     expect(banked.categories).toEqual(['banked'])
-    expect(banked.summary).toBe('Codex BANKED reset')
+    expect(banked.summary).toBe('Codex reset (banked)')
   })
 
   it('produces a 60-minute block centered on scheduled_for, 30 minutes each side', () => {
