@@ -1,0 +1,37 @@
+{
+  "data": {
+    "latest_reset": {
+      "id": "observed-2097043464538264003",
+      "reset_type": "regular",
+      "announced_at": "2026-09-08T01:56:57.501Z",
+      "text": "All reset for everyone. Enjoy the week with Astra. https://t.co/WBM38JotGO",
+      "source": {
+        "type": "observed",
+        "url": "https://x.com/thsottiaux/status/2097174560412246215"
+      }
+    },
+    "scheduled_reset": null,
+    "active_watch": {
+      "level": "elevated",
+      "reset_chance_percent": 62,
+      "forecast_window": "soon",
+      "observed_at": "2026-09-14T20:00:00.000Z",
+      "expires_at": "2026-09-15T04:00:00.000Z",
+      "text": "Elevated chance of a reset soon.",
+      "source": {
+        "type": "observed",
+        "url": "https://x.com/thsottiaux/status/2100000000000000002"
+      }
+    },
+    "stats": {
+      "total": 52,
+      "last_reset_at": "2026-09-08T01:56:57.501Z",
+      "days_since_last": 6.7,
+      "avg_interval_days": 7
+    }
+  },
+  "meta": {
+    "api_version": "v1",
+    "generated_at": "2026-09-14T20:00:01.000Z"
+  }
+}
