@@ -1,9 +1,9 @@
-import { exports } from 'cloudflare:workers'
+import { env, exports } from 'cloudflare:workers'
 import ICAL from 'ical.js'
 import { describe, expect, it } from 'vitest'
 
-const runE2E = process.env.RUN_E2E === '1'
-const deployedUrl = process.env.DEPLOYED_URL
+const runE2E = env.RUN_E2E === '1'
+const deployedUrl = env.DEPLOYED_URL
 
 describe.skipIf(!runE2E)('live upstream', () => {
   it('builds a valid feed from the real API with at least 52 events', async () => {
