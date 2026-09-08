@@ -1,0 +1,38 @@
+{
+  "data": {
+    "latest_reset": {
+      "id": "observed-2097043464538264003",
+      "reset_type": "regular",
+      "announced_at": "2026-09-08T01:56:57.501Z",
+      "text": "All reset for everyone. Enjoy the week with Astra. https://t.co/WBM38JotGO",
+      "source": {
+        "type": "observed",
+        "url": "https://x.com/thsottiaux/status/2097174560412246215"
+      }
+    },
+    "scheduled_reset": {
+      "id": "2100000000000000001",
+      "status": "scheduled",
+      "reset_type": "regular",
+      "announced_at": "2026-09-15T12:00:00.000Z",
+      "scheduled_for": "2026-09-15T18:00:00.000Z",
+      "text": "We'll be resetting everyone's limits around 6pm PT today.",
+      "source": {
+        "type": "x_post",
+        "author": "thsottiaux",
+        "url": "https://x.com/thsottiaux/status/2100000000000000001"
+      }
+    },
+    "active_watch": null,
+    "stats": {
+      "total": 53,
+      "last_reset_at": "2026-09-08T01:56:57.501Z",
+      "days_since_last": 7,
+      "avg_interval_days": 7
+    }
+  },
+  "meta": {
+    "api_version": "v1",
+    "generated_at": "2026-09-15T12:00:01.000Z"
+  }
+}
