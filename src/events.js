@@ -29,7 +29,7 @@ function pastResetEvent(reset) {
   const isBanked = reset.reset_type === 'banked'
   return {
     uid: `${reset.id}@${DOMAIN}`,
-    summary: isBanked ? 'Codex reset (banked)' : 'Codex reset',
+    summary: isBanked ? 'Codex Reset (banked)' : 'Codex Reset',
     categories: [reset.reset_type],
     description: reset.source?.url,
     url: reset.source?.url,
@@ -44,7 +44,7 @@ function scheduledResetEvent(scheduled) {
   const isBanked = scheduled.reset_type === 'banked'
   const base = {
     uid: `${scheduled.id}@${DOMAIN}`,
-    summary: `Codex reset announced${isBanked ? ' (banked)' : ''}`,
+    summary: `Codex Reset announced${isBanked ? ' (banked)' : ''}`,
     categories: ['scheduled'],
     description: scheduled.source?.url,
     url: scheduled.source?.url,
@@ -77,7 +77,7 @@ function watchEvent(watch) {
     watch.reset_chance_percent != null ? `, ${watch.reset_chance_percent}%` : ''
   return {
     uid: `watch-${watch.observed_at}@${DOMAIN}`,
-    summary: `Codex reset forecast (${watch.level}${percent})`,
+    summary: `Codex Reset forecast (${watch.level}${percent})`,
     categories: ['forecast'],
     description: watch.source?.url,
     url: watch.source?.url,

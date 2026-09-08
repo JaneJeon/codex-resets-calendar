@@ -52,9 +52,9 @@ describe('buildEvents', () => {
     const regular = events.find(e => e.uid.startsWith('r1@'))
     const banked = events.find(e => e.uid.startsWith('r2@'))
     expect(regular.categories).toEqual(['regular'])
-    expect(regular.summary).toBe('Codex reset')
+    expect(regular.summary).toBe('Codex Reset')
     expect(banked.categories).toEqual(['banked'])
-    expect(banked.summary).toBe('Codex reset (banked)')
+    expect(banked.summary).toBe('Codex Reset (banked)')
   })
 
   it('produces a 60-minute block centered on scheduled_for, 30 minutes each side', () => {
@@ -103,7 +103,7 @@ describe('buildEvents', () => {
       e => e.uid === 'r1@codex-resets-calendar.janejeon.workers.dev'
     )
     expect(matching).toHaveLength(1)
-    expect(matching[0].summary).toBe('Codex reset')
+    expect(matching[0].summary).toBe('Codex Reset')
   })
 
   it('renders a watch spanning two Los Angeles days with DTEND two days after DTSTART', () => {
@@ -123,7 +123,7 @@ describe('buildEvents', () => {
     const watch = events.find(e => e.uid.startsWith('watch-'))
     expect(watch.startDate).toBe('20260907')
     expect(watch.endDate).toBe('20260909')
-    expect(watch.summary).toBe('Codex reset forecast (elevated, 62%)')
+    expect(watch.summary).toBe('Codex Reset forecast (elevated, 62%)')
   })
 
   it('produces the same UIDs across two builds of identical input', () => {

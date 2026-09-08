@@ -153,7 +153,7 @@ describe('the feed', () => {
       'http://example.com/codex-resets.ics'
     )
     const body = await response.text()
-    expect(body).toContain('SUMMARY:Codex reset announced')
+    expect(body).toContain('SUMMARY:Codex Reset announced')
     expect(body).toContain('DTSTART:20260915T173000Z')
     expect(body).toContain('DTEND:20260915T183000Z')
   })
@@ -197,7 +197,7 @@ describe('the feed', () => {
     )
     const body = await response.text()
     expect(body).toContain('CATEGORIES:forecast')
-    expect(body).toContain('SUMMARY:Codex reset forecast (elevated\\, 62%)')
+    expect(body).toContain('SUMMARY:Codex Reset forecast (elevated\\, 62%)')
   })
 
   it('dedupes a scheduled reset already present in history', async () => {
