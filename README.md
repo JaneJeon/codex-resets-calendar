@@ -56,6 +56,7 @@ npx swarp secrets refresh   # resolve .env.template into .env from 1Password
 npm run dev     # local dev server
 npm test        # unit + integration tests
 npm run test:e2e  # hits the real upstream API; needs network
+npm run db:generate # generate migrations after editing the Drizzle schema
 npm run db:migrate:local # apply D1 migrations to local development
 ```
 

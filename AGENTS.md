@@ -64,9 +64,11 @@ DSMA `start_date` and `end_date` are authoritative
 `America/Los_Angeles` wall times. Ignore the API's inconsistent timezone and
 UTC fields. Timed events are converted from LA wall time to UTC with DST for
 their date. For all-day records, the source end date is inclusive and ICS
-`DTEND` is the following date. D1 reads and predicates use Drizzle; the
-bulk-ingest helper uses SQLite JSON input to stay below D1's query and
-bound-parameter limits.
+`DTEND` is the following date. All runtime D1 reads and writes use Drizzle's
+direct D1 adapter. Its generic bulk-ingest helper uses SQLite JSON input to
+stay below D1's query and bound-parameter limits. Drizzle Kit generates the
+checked-in migrations and applies them remotely during deploy; Wrangler
+applies the same migrations to local D1.
 
 That header is what actually caches the feed. `wrangler.jsonc` enables
 Workers Cache (`"cache": { "enabled": true }`), so Cloudflare serves a
