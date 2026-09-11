@@ -8,7 +8,8 @@
     "deploy": "wrangler deploy",
     "test": "vitest run",
     "test:e2e": "RUN_E2E=1 vitest run test/e2e",
-    "lint": "prettier --check .",
+    "lint": "run-s lint:*",
+    "lint:prettier": "prettier --check .",
     "format": "prettier --write .",
     "prepare": "husky"
   },
@@ -18,12 +19,10 @@
     "husky": "^9.1.7",
     "ical.js": "^2.1.0",
     "lint-staged": "^15.2.10",
+    "npm-run-all2": "^9.0.3",
     "prettier": "^3.3.3",
     "vitest": "^4.1.0",
     "wrangler": "^4.129.1"
-  },
-  "lint-staged": {
-    "*.{js,json,md}": "prettier --write"
   },
   "allowScripts": {
     "esbuild@0.28.1": true,

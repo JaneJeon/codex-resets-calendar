@@ -1,5 +1,5 @@
 import { cloudflareTest } from '@cloudflare/vitest-plugin'
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 
 export default defineConfig({
   plugins: [
@@ -14,6 +14,8 @@ export default defineConfig({
     })
   ],
   test: {
+    // Agent worktrees under .claude/ carry their own copy of the test suite.
+    exclude: [...configDefaults.exclude, '.claude/**'],
     coverage: {
       provider: 'istanbul'
     }
