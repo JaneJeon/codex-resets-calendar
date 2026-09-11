@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { UpstreamError } from '../../src/errors.js'
+import { UpstreamError } from '../../../src/errors.js'
 import {
   withResponseCache,
   type ResponseCacheStore
-} from '../../src/lib/response-cache.js'
+} from '../../../src/lib/response-cache.js'
 
 type TestStore = ResponseCacheStore & { put: ReturnType<typeof vi.fn> }
 
