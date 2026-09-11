@@ -99,11 +99,12 @@ once real lead-time data accumulates.
 
 ## Event identity and dedupe
 
-UID is `<id>@cal.janejeon.com`. Changing the suffix gives every event a
+UID is `<id>@cal.janejeon.dev`. Changing the suffix gives every event a
 new identity, so each subscriber's client deletes and re-creates the
-whole calendar. It moved from `codex-resets-calendar.janejeon.workers.dev`
-together with the feed URL, when every subscription had to be re-added
-anyway. A `scheduled_reset` shares its
+whole calendar. The suffix has followed the feed's host
+(`codex-resets-calendar.janejeon.workers.dev`, then briefly
+`cal.janejeon.com`), moving only when subscriptions had to be re-added
+at a new URL anyway. A `scheduled_reset` shares its
 id with the eventual history entry (both are sourced from the same X
 post), so when it converts to a past reset the same UID takes over in
 place. `buildEvents` in `src/calendars/codex-resets/events.js` dedupes
@@ -119,6 +120,22 @@ by UID and drops a
 | `/resets` returns 429                      | 502, `no-store`, `Retry-After` logged, no retry                                  |
 | `/status` fails in any way                 | serve the history-only feed, `console.warn`                                      |
 | `ics` rejects an event                     | 500, `no-store`, `console.error`                                                 |
+
+## Domain
+
+Feeds are served from `cal.janejeon.dev`, not janejeon.com. janejeon.com
+has Cloudflare Bot Fight Mode on, which challenges requests from cloud
+IPs. On the first deploy it answered every request from GitHub Actions
+with a 403 challenge, and calendar services such as Fastmail fetch
+subscribed feeds from their own servers too. On the Free plan, Bot Fight
+Mode can't be skipped for a single hostname, and janejeon.com needs it
+for the home-lab services behind its wildcard DNS record.
+
+On janejeon.dev, Bot Fight Mode is off. In its place, one WAF custom
+rule, `(http.user_agent eq "")`, blocks requests without a User-Agent;
+that was 89% of what Bot Fight Mode challenged on janejeon.com. Both are
+zone settings in the Cloudflare dashboard, not in this repo. Every client
+of the feed, tests included, must send a User-Agent.
 
 ## Local setup and secrets
 
@@ -142,7 +159,7 @@ Merging to master deploys; never deploy from a laptop.
 `wrangler deploy --dry-run` on every push and PR. On a push to master,
 the `deploy` job runs `cloudflare/wrangler-action` with the
 `CLOUDFLARE_API_TOKEN` secret and the `CLOUDFLARE_ACCOUNT_ID` variable.
-It then waits for `https://cal.janejeon.com/codex-resets.ics` to return
+It then waits for `https://cal.janejeon.dev/codex-resets.ics` to return
 200 and runs only the `deployed feed` e2e block against it. The
 live-upstream block is left out, so an upstream rate limit can't fail a
 deploy that already happened.

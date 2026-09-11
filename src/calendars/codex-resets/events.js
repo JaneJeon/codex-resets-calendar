@@ -1,6 +1,6 @@
 import { isValidURL } from 'ics'
 
-const DOMAIN = 'cal.janejeon.com'
+const DOMAIN = 'cal.janejeon.dev'
 const SCHEDULED_TOLERANCE_MS = 30 * 60 * 1000
 
 export function laDate(isoString) {
