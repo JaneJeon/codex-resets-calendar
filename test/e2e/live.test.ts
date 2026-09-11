@@ -45,6 +45,15 @@ describe.skipIf(!runE2E)('live upstream', () => {
       expect(diffDays).toBeGreaterThanOrEqual(1)
     }
   })
+
+  it('stores the live DTSM catalog and builds a valid filtered feed', async () => {
+    const response = await exports.default.fetch(
+      'http://example.com/dtsm-events.ics'
+    )
+    expect(response.status).toBe(200)
+    const component = new ICAL.Component(ICAL.parse(await response.text()))
+    expect(component.getAllSubcomponents('vevent').length).toBeGreaterThan(0)
+  })
 })
 
 describe.skipIf(!runE2E || !deployedUrl)('deployed feed', () => {
@@ -64,5 +73,14 @@ describe.skipIf(!runE2E || !deployedUrl)('deployed feed', () => {
     expect(
       component.getAllSubcomponents('vevent').length
     ).toBeGreaterThanOrEqual(52)
+  })
+
+  it('serves the deployed DTSM feed', async () => {
+    const response = await fetch(new URL('/dtsm-events.ics', deployedUrl!), {
+      headers: { 'User-Agent': 'calendars-smoke-test' }
+    })
+    expect(response.status).toBe(200)
+    const component = new ICAL.Component(ICAL.parse(await response.text()))
+    expect(component.getAllSubcomponents('vevent').length).toBeGreaterThan(0)
   })
 })

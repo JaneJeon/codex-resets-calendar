@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { CalendarDefinition } from '../../src/calendars/index.js'
 import { buildCalendarBody } from '../../src/index.js'
+import { calendars } from '../../src/calendars/index.js'
 import type { ResponseCacheStore } from '../../src/lib/response-cache.js'
 
 const baseCalendar: CalendarDefinition = {
@@ -47,5 +48,12 @@ describe('buildCalendarBody', () => {
     expect(store.put).toHaveBeenCalledWith('test.ics', body, {
       metadata: { cachedAt: expect.any(Number) }
     })
+  })
+
+  it('turns an unavailable D1 binding into an upstream error', async () => {
+    const calendar = calendars.find(value => value.path === '/dtsm-events.ics')!
+    await expect(calendar.buildEvents({} as Env)).rejects.toThrow(
+      'DTSM database unavailable'
+    )
   })
 })

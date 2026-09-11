@@ -24,4 +24,10 @@ describe('calendar registry', () => {
     expect(findCalendar('/codex-resets.ics/')).toBeUndefined()
     expect(findCalendar('/')).toBeUndefined()
   })
+
+  it('registers the Downtown San Mateo feed', () => {
+    expect(findCalendar('/dtsm-events.ics')?.name).toBe(
+      'Downtown San Mateo Events'
+    )
+  })
 })
