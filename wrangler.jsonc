@@ -14,6 +14,14 @@
       "id": "b6d2d4946f7e47a4b74559d167e92f3f"
     }
   ],
+  "d1_databases": [
+    {
+      "binding": "CALENDAR_DB",
+      "database_name": "calendars",
+      "database_id": "46a7cda1-e481-4e17-92a0-3fc1e5f65467",
+      "migrations_dir": "migrations"
+    }
+  ],
   // Workers Cache: serve cached responses without running the Worker, per
   // each response's Cache-Control. See AGENTS.md, Calendars.
   "cache": {
