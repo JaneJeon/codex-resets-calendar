@@ -123,9 +123,10 @@ by UID and drops a
 ## Local setup and secrets
 
 `.env.template` holds 1Password references for `CLOUDFLARE_API_TOKEN`
-and `CLOUDFLARE_ACCOUNT_ID`. `npx swarp secrets refresh` resolves it
-into `.env`, and `.envrc` autoloads that through direnv
-(`npx swarp direnv allow` once per checkout). Wrangler authenticates
+and `CLOUDFLARE_ACCOUNT_ID`. Run `npx swarp direnv allow` once per
+checkout, so direnv autoloads `.env` through `.envrc`, then
+`npx swarp secrets refresh` to resolve the template into `.env`
+(again whenever a secret rotates). Wrangler authenticates
 from those two variables, so there is no `wrangler login`. Run
 commands that need them under `direnv exec . <command>`.
 

@@ -1,6 +1,6 @@
 import { createEvents } from 'ics'
 
-const PRODUCT_ID = '-//janejeon//codex-resets-calendar//EN'
+const PRODUCT_ID = '-//janejeon//calendars//EN'
 
 export function serializeCalendar(events, { name }) {
   const { error, value } = createEvents(events, {

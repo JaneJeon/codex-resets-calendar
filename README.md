@@ -1,8 +1,9 @@
-# codex-resets-calendar
+# calendars
 
-A stateless Cloudflare Worker that serves Codex weekly usage-limit resets
-as an iCalendar feed. Subscribe to it from any calendar client that
+A stateless Cloudflare Worker that serves iCalendar feeds at
+`cal.janejeon.com/<path>`. Subscribe to one from any calendar client that
 supports ICS subscriptions (Fastmail, Google Calendar, Apple Calendar).
+Today it serves one calendar: Codex weekly usage-limit resets.
 
 Feed URL:
 
@@ -39,8 +40,8 @@ CalDAV two-way sync) will work.
 
 ```sh
 npm ci
-npx swarp secrets refresh   # resolve .env.template into .env from 1Password
 npx swarp direnv allow      # let direnv autoload .env
+npx swarp secrets refresh   # resolve .env.template into .env from 1Password
 npm run dev     # local dev server
 npm test        # unit + integration tests
 npm run test:e2e  # hits the real upstream API; needs network
