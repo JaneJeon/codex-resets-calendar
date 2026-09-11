@@ -96,6 +96,25 @@ describe('buildEvents', () => {
     expect(scheduled.startOutputType).toBe('utc')
   })
 
+  it('renders a banked schedule without a time as an all-day event', () => {
+    const status = {
+      scheduled_reset: {
+        id: 's1',
+        status: 'scheduled',
+        reset_type: 'banked',
+        announced_at: '2026-09-10T01:00:00.000Z',
+        scheduled_for: null
+      }
+    } satisfies Status
+
+    const scheduled = buildEvents(resets, status).find(e =>
+      e.uid?.startsWith('s1@')
+    )!
+    expect(scheduled.title).toBe('Codex Reset announced (banked)')
+    expect(scheduled.start).toEqual([2026, 9, 9])
+    expect(scheduled.end).toEqual([2026, 9, 10])
+  })
+
   it('dedupes a scheduled reset that already appears in history, keeping the history version', () => {
     const status = {
       scheduled_reset: {
@@ -166,7 +185,7 @@ describe('buildEvents', () => {
   })
 
   it('produces the same UIDs across two builds of identical input', () => {
-    const first = buildEvents(resets, {})
+    const first = buildEvents(resets)
     const second = buildEvents(resets, {})
     expect(first.map(e => e.uid).sort()).toEqual(second.map(e => e.uid).sort())
   })

@@ -22,7 +22,7 @@ jobs:
 
       - run: npm run lint
 
-      - run: npm test
+      - run: npm run test:coverage
 
       - name: Check that the Worker bundles
         run: npx wrangler deploy --dry-run

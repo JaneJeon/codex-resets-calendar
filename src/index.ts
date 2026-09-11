@@ -1,6 +1,7 @@
-import { findCalendar } from './calendars/index.js'
+import { findCalendar, type CalendarDefinition } from './calendars/index.js'
 import { UpstreamError } from './errors.js'
 import { serializeCalendar } from './lib/ics.js'
+import { withResponseCache } from './lib/response-cache.js'
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
 const CONTENT_TYPE = 'text/calendar; charset=utf-8'
@@ -14,6 +15,24 @@ function feedResponse(body: string, cacheTtlSeconds: number): Response {
   })
 }
 
+export async function buildCalendarBody(
+  calendar: CalendarDefinition,
+  env: Env
+): Promise<string> {
+  const build = async () =>
+    serializeCalendar(await calendar.buildEvents(), { name: calendar.name })
+
+  return calendar.responseCache
+    ? withResponseCache({
+        store: env.CALENDAR_CACHE,
+        key: calendar.responseCache.key,
+        freshnessSeconds: calendar.responseCache.freshnessSeconds,
+        label: calendar.name,
+        build
+      })
+    : build()
+}
+
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     const { pathname } = new URL(request.url)
@@ -24,11 +43,7 @@ export default {
     }
 
     try {
-      const body = calendar.buildResponse
-        ? await calendar.buildResponse(env)
-        : serializeCalendar(await calendar.buildEvents(), {
-            name: calendar.name
-          })
+      const body = await buildCalendarBody(calendar, env)
       return feedResponse(body, calendar.cacheTtlSeconds)
     } catch (error: unknown) {
       if (error instanceof UpstreamError) {

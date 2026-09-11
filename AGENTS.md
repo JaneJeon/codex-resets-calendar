@@ -17,7 +17,7 @@ scope by design.
 ## Calendars
 
 Each calendar lives in `src/calendars/<name>/` and default-exports
-`{ path, name, cacheTtlSeconds, buildEvents(), buildResponse?() }`.
+`{ path, name, cacheTtlSeconds, responseCache?, buildEvents() }`.
 `buildEvents` resolves to `ics` event attributes and throws
 `UpstreamError` (`src/errors.ts`) when its source fails.
 `src/calendars/index.ts` is the registry.
@@ -36,8 +36,9 @@ response is available, and anything else (for example `ics` rejecting
 an event) is a logged 500.
 
 Reusable response-cache mechanics live in `src/lib/response-cache.ts` and
-ICS serialization lives in `src/lib/ics.ts`; a calendar opts into those
-behaviors through its own `buildResponse` implementation.
+ICS serialization lives in `src/lib/ics.ts`. Every calendar returns event
+attributes through `buildEvents`; a calendar can declaratively opt the shared
+serialization pipeline into retained-response caching with `responseCache`.
 
 Codex resets also uses the `CALENDAR_CACHE` Workers KV binding. A
 successful serialized response is written under the calendar's stable

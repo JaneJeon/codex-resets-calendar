@@ -5,15 +5,18 @@ export interface CalendarDefinition {
   path: string
   name: string
   cacheTtlSeconds: number
+  responseCache?: {
+    key: string
+    freshnessSeconds: number
+  }
   buildEvents(): Promise<CalendarEvent[]>
-  buildResponse?(env: Env): Promise<string>
 }
 
 // Every calendar the Worker serves. Each entry is
-// { path, name, cacheTtlSeconds, buildEvents(), buildResponse?() }, where
-// buildEvents resolves to ics event attributes and throws UpstreamError when
-// its source fails. buildResponse is an optional calendar-owned response
-// wrapper for calendars that need response-level behavior such as caching.
+// { path, name, cacheTtlSeconds, responseCache?, buildEvents() }, where
+// buildEvents always resolves to ics event attributes and throws UpstreamError
+// when its source fails. responseCache declaratively opts the serialized
+// calendar into retained-response caching.
 export const calendars: CalendarDefinition[] = [codexResets]
 
 export function findCalendar(pathname: string): CalendarDefinition | undefined {

@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
     "test:e2e": "RUN_E2E=1 vitest run test/e2e",
     "lint": "run-s lint:*",
     "lint:prettier": "prettier --check .",
@@ -19,6 +20,7 @@
     "@cloudflare/vitest-plugin": "^1.1.7",
     "@janejeon/prettier-config": "^2.0.0",
     "@types/node": "^24.13.4",
+    "@vitest/coverage-istanbul": "^4.1.11",
     "husky": "^9.1.7",
     "ical.js": "^2.1.0",
     "lint-staged": "^15.2.10",
