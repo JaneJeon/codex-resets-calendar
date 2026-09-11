@@ -63,6 +63,7 @@ describe('the feed', () => {
   })
 
   it('serves a history-only feed when /status fails', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
     mockFetch(async input => {
       const url = String(input)
       if (url.includes('/api/v1/resets')) return jsonResponse(resetsFixture)
@@ -77,6 +78,10 @@ describe('the feed', () => {
     expect(response.status).toBe(200)
     const body = await response.text()
     expect(body).toContain('BEGIN:VEVENT')
+    expect(warnSpy).toHaveBeenCalledWith(
+      'status fetch failed, serving history-only feed',
+      expect.any(Error)
+    )
   })
 
   it('returns 502 without caching when /resets returns a 5xx', async () => {
@@ -138,6 +143,7 @@ describe('the feed', () => {
   })
 
   it('returns 502 when /resets returns 200 with an empty array', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     mockFetch(async input => {
       const url = String(input)
       if (url.includes('/api/v1/resets')) {
@@ -153,6 +159,10 @@ describe('the feed', () => {
       'http://example.com/codex-resets.ics'
     )
     expect(response.status).toBe(502)
+    expect(errorSpy).toHaveBeenCalledWith(
+      'resets fetch failed',
+      expect.any(Error)
+    )
   })
 
   it('returns 502 and logs Retry-After when /resets returns 429', async () => {

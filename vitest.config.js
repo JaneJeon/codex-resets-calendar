@@ -1,6 +1,11 @@
 import { cloudflareTest } from '@cloudflare/vitest-plugin'
 import { configDefaults, defineConfig } from 'vitest/config'
 
+// The Worker needs no secrets, so don't let wrangler load .env (the Cloudflare
+// API token) into the test Worker's env. This also silences wrangler's
+// "Using secrets defined in .env" log on every test file.
+process.env.CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV ??= 'false'
+
 export default defineConfig({
   plugins: [
     cloudflareTest({

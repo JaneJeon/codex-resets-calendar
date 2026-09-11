@@ -150,7 +150,15 @@ commands that need them under `direnv exec . <command>`.
 Gotcha: wrangler also reads `.env` by itself, and in local development
 it loads those values into the Worker's `env`. The API token is
 therefore visible to Worker code under `wrangler dev`. Never read it
-from `env` in `src/`.
+from `env` in `src/`. Tests turn this off: `vitest.config.js` sets
+`CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV=false`, which also removes
+wrangler's "Using secrets defined in .env" log.
+
+Test output must stay clean in CI, not only locally. A test that
+drives a failure path must mock the console method the Worker calls
+and assert on the message. CI prints unmocked Worker logs as `stderr`
+blocks, but local runs don't show them, so a clean local run proves
+nothing about CI.
 
 ## Deploy
 
