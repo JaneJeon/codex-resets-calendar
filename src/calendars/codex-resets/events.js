@@ -1,6 +1,6 @@
 import { isValidURL } from 'ics'
 
-const DOMAIN = 'codex-resets-calendar.janejeon.workers.dev'
+const DOMAIN = 'cal.janejeon.com'
 const SCHEDULED_TOLERANCE_MS = 30 * 60 * 1000
 
 export function laDate(isoString) {

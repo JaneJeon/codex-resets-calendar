@@ -7,7 +7,7 @@ supports ICS subscriptions (Fastmail, Google Calendar, Apple Calendar).
 Feed URL:
 
 ```
-https://codex-resets-calendar.janejeon.workers.dev/codex-resets.ics
+https://cal.janejeon.com/codex-resets.ics
 ```
 
 ## What it does

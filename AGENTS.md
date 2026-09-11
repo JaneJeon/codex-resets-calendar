@@ -99,9 +99,11 @@ once real lead-time data accumulates.
 
 ## Event identity and dedupe
 
-UID is `<id>@codex-resets-calendar.janejeon.workers.dev`. The domain
-part must match the deploy host exactly — changing it orphans every
-event already on a subscriber's calendar. A `scheduled_reset` shares its
+UID is `<id>@cal.janejeon.com`. Changing the suffix gives every event a
+new identity, so each subscriber's client deletes and re-creates the
+whole calendar. It moved from `codex-resets-calendar.janejeon.workers.dev`
+together with the feed URL, when every subscription had to be re-added
+anyway. A `scheduled_reset` shares its
 id with the eventual history entry (both are sourced from the same X
 post), so when it converts to a past reset the same UID takes over in
 place. `buildEvents` in `src/calendars/codex-resets/events.js` dedupes
@@ -138,9 +140,6 @@ from `env` in `src/`.
 npx wrangler dev     # verify locally, curl and parse the feed before deploying
 npx wrangler deploy
 ```
-
-The Cloudflare account id and workers.dev subdomain are not recorded in
-this repo (it is public). They live in Jane's private notes.
 
 After any change to `src/`, update the Craft doc
 `Codex reset watch — current setup` with what actually changed and
