@@ -20,7 +20,7 @@ export async function buildCalendarBody(
   env: Env
 ): Promise<string> {
   const build = async () =>
-    serializeCalendar(await calendar.buildEvents(), { name: calendar.name })
+    serializeCalendar(await calendar.buildEvents(env), { name: calendar.name })
 
   return calendar.responseCache
     ? withResponseCache({

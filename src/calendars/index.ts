@@ -1,5 +1,6 @@
 import type { CalendarEvent } from '../lib/ics.js'
 import codexResets from './codex-resets/index.js'
+import dtsmEvents from './dtsm-events/index.js'
 
 export interface CalendarDefinition {
   path: string
@@ -9,7 +10,7 @@ export interface CalendarDefinition {
     key: string
     freshnessSeconds: number
   }
-  buildEvents(): Promise<CalendarEvent[]>
+  buildEvents(env: Env): Promise<CalendarEvent[]>
 }
 
 // Every calendar the Worker serves. Each entry is
@@ -17,7 +18,7 @@ export interface CalendarDefinition {
 // buildEvents always resolves to ics event attributes and throws UpstreamError
 // when its source fails. responseCache declaratively opts the serialized
 // calendar into retained-response caching.
-export const calendars: CalendarDefinition[] = [codexResets]
+export const calendars: CalendarDefinition[] = [codexResets, dtsmEvents]
 
 export function findCalendar(pathname: string): CalendarDefinition | undefined {
   return calendars.find(calendar => calendar.path === pathname)
