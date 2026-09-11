@@ -1,7 +1,7 @@
 import { defineConfig } from 'drizzle-kit'
 
 export default defineConfig({
-  schema: ['./src/calendars/dtsm-events/schema.ts'],
+  schema: './src/calendars/**/schema.ts',
   out: './migrations',
   dialect: 'sqlite',
   driver: 'd1-http',
