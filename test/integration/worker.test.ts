@@ -4,6 +4,7 @@ import resetsFixture from '../fixtures/resets.json'
 import statusEmptyFixture from '../fixtures/status-empty.json'
 import statusScheduledFixture from '../fixtures/status-scheduled.json'
 import statusWatchFixture from '../fixtures/status-watch.json'
+import dtsmFixture from '../fixtures/dtsm-events.json'
 
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(body), {
@@ -19,7 +20,190 @@ function mockFetch(handler: typeof fetch): void {
 
 beforeEach(async () => {
   vi.restoreAllMocks()
-  await env.CALENDAR_CACHE.delete('codex-resets.ics')
+  await Promise.all([
+    env.CALENDAR_CACHE.delete('codex-resets.ics'),
+    env.CALENDAR_CACHE.delete('dtsm-events.ics')
+  ])
+  await env.CALENDAR_DB.batch([
+    env.CALENDAR_DB.prepare('DELETE FROM dtsm_event_organizers'),
+    env.CALENDAR_DB.prepare('DELETE FROM dtsm_event_categories'),
+    env.CALENDAR_DB.prepare('DELETE FROM dtsm_events'),
+    env.CALENDAR_DB.prepare('DELETE FROM dtsm_organizers'),
+    env.CALENDAR_DB.prepare('DELETE FROM dtsm_categories'),
+    env.CALENDAR_DB.prepare('DELETE FROM dtsm_venues'),
+    env.CALENDAR_DB.prepare(
+      `UPDATE dtsm_sync_state SET last_success_at = NULL,
+       next_attempt_at = 0, lease_until = 0 WHERE calendar = 'dtsm-events'`
+    )
+  ])
+})
+
+describe('the Downtown San Mateo feed', () => {
+  it('stores the full snapshot, filters the default feed in SQL, and renders LA wall time', async () => {
+    mockFetch(async input => {
+      const url = new URL(String(input))
+      expect(url.searchParams.get('venue')).toBeNull()
+      expect(url.searchParams.get('start_date')).toBe('2026-09-11')
+      expect(url.searchParams.get('end_date')).toBeNull()
+      return jsonResponse(dtsmFixture)
+    })
+
+    const response = await exports.default.fetch(
+      'http://example.com/dtsm-events.ics'
+    )
+    expect(response.status).toBe(200)
+    expect(response.headers.get('Cache-Control')).toBe('public, max-age=86400')
+    const body = await response.text()
+    expect(body).toContain('DTSTART:20260911T010000Z')
+    expect(body).toContain('DTEND:20260911T030000Z')
+    expect(body).toContain('SUMMARY:September Nights & Live Music')
+    expect(body).toContain('SUMMARY:Month-long Art Walk')
+    expect(body).not.toContain('Stored but not in the default feed')
+    expect(body).not.toContain('very-large-image')
+
+    const count = await env.CALENDAR_DB.prepare(
+      'SELECT COUNT(*) count FROM dtsm_events'
+    ).first<{
+      count: number
+    }>()
+    expect(count?.count).toBe(3)
+  })
+
+  it('uses the stable KV key and then fresh D1 state without another source request', async () => {
+    mockFetch(async () => jsonResponse(dtsmFixture))
+    const first = await exports.default.fetch(
+      'http://example.com/dtsm-events.ics'
+    )
+    const body = await first.text()
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockClear()
+
+    const kvHit = await exports.default.fetch(
+      'http://example.com/dtsm-events.ics?different=edge-key'
+    )
+    expect(await kvHit.text()).toBe(body)
+    expect(fetchMock).not.toHaveBeenCalled()
+
+    await env.CALENDAR_CACHE.delete('dtsm-events.ics')
+    const d1Hit = await exports.default.fetch(
+      'http://example.com/dtsm-events.ics'
+    )
+    expect(await d1Hit.text()).toBe(body)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('refreshes from today instead of backfilling or skipping an unsaved gap', async () => {
+    mockFetch(async () => jsonResponse(dtsmFixture))
+    await exports.default.fetch('http://example.com/dtsm-events.ics')
+    await env.CALENDAR_CACHE.delete('dtsm-events.ics')
+    await env.CALENDAR_DB.prepare(
+      "UPDATE dtsm_sync_state SET next_attempt_at = 0 WHERE calendar = 'dtsm-events'"
+    ).run()
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockClear()
+
+    await exports.default.fetch('http://example.com/dtsm-events.ics')
+    const url = new URL(String(fetchMock.mock.calls[0]![0]))
+    expect(url.searchParams.get('start_date')).toBe('2026-09-11')
+  })
+
+  it('revisits an event that is currently ongoing', async () => {
+    const ongoing = structuredClone(dtsmFixture)
+    ongoing.events[0]!.start_date = '2026-09-01 00:00:00'
+    ongoing.events[0]!.end_date = '2026-09-30 23:59:59'
+    mockFetch(async () => jsonResponse(ongoing))
+    await exports.default.fetch('http://example.com/dtsm-events.ics')
+    await env.CALENDAR_CACHE.delete('dtsm-events.ics')
+    await env.CALENDAR_DB.prepare(
+      "UPDATE dtsm_sync_state SET next_attempt_at = 0 WHERE calendar = 'dtsm-events'"
+    ).run()
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockClear()
+    await exports.default.fetch('http://example.com/dtsm-events.ics')
+    expect(
+      new URL(String(fetchMock.mock.calls[0]![0])).searchParams.get(
+        'start_date'
+      )
+    ).toBe('2026-09-01')
+  })
+
+  it('serves stored rows and records a full-day backoff after refresh failure', async () => {
+    mockFetch(async () => jsonResponse(dtsmFixture))
+    await exports.default.fetch('http://example.com/dtsm-events.ics')
+    await env.CALENDAR_CACHE.delete('dtsm-events.ics')
+    await env.CALENDAR_DB.prepare(
+      "UPDATE dtsm_sync_state SET next_attempt_at = 0 WHERE calendar = 'dtsm-events'"
+    ).run()
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mockFetch(async () => new Response('down', { status: 503 }))
+
+    const response = await exports.default.fetch(
+      'http://example.com/dtsm-events.ics'
+    )
+    expect(response.status).toBe(200)
+    expect(await response.text()).toContain('September Nights')
+    expect(warning).toHaveBeenCalledWith(
+      'DTSM events refresh failed, serving stored events',
+      expect.any(Error)
+    )
+    const state = await env.CALENDAR_DB.prepare(
+      "SELECT next_attempt_at, last_success_at FROM dtsm_sync_state WHERE calendar = 'dtsm-events'"
+    ).first<{ next_attempt_at: number; last_success_at: number }>()
+    expect(
+      state!.next_attempt_at - state!.last_success_at
+    ).toBeGreaterThanOrEqual(86_399)
+  })
+
+  it('returns 502 and backs off an hour after an initial empty snapshot', async () => {
+    mockFetch(async () => jsonResponse({ events: [], total_pages: 1 }))
+    const response = await exports.default.fetch(
+      'http://example.com/dtsm-events.ics'
+    )
+    expect(response.status).toBe(502)
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockClear()
+    const retry = await exports.default.fetch(
+      'http://example.com/dtsm-events.ics'
+    )
+    expect(retry.status).toBe(502)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('returns 502 when another first refresh holds the lease', async () => {
+    await env.CALENDAR_DB.prepare(
+      "UPDATE dtsm_sync_state SET lease_until = 9999999999 WHERE calendar = 'dtsm-events'"
+    ).run()
+    const response = await exports.default.fetch(
+      'http://example.com/dtsm-events.ics'
+    )
+    expect(response.status).toBe(502)
+  })
+
+  it('serves stored rows when another refresh holds the lease', async () => {
+    mockFetch(async () => jsonResponse(dtsmFixture))
+    await exports.default.fetch('http://example.com/dtsm-events.ics')
+    await env.CALENDAR_CACHE.delete('dtsm-events.ics')
+    await env.CALENDAR_DB.prepare(
+      `UPDATE dtsm_sync_state SET next_attempt_at = 0, lease_until = 9999999999
+       WHERE calendar = 'dtsm-events'`
+    ).run()
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockClear()
+    const response = await exports.default.fetch(
+      'http://example.com/dtsm-events.ics'
+    )
+    expect(response.status).toBe(200)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('wraps an unexpected first-refresh exception as an upstream failure', async () => {
+    mockFetch(async () => new Response('not json'))
+    const response = await exports.default.fetch(
+      'http://example.com/dtsm-events.ics'
+    )
+    expect(response.status).toBe(502)
+  })
 })
 
 afterEach(() => {

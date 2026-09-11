@@ -95,4 +95,13 @@ describe('serializeCalendar', () => {
       serializeCalendar([{ ...allDayEvent, url: 'not a url' }], options)
     ).toThrow()
   })
+
+  it('folds Unicode content at 75 UTF-8 octets and remains parseable', () => {
+    const title = `Night market ${'é'.repeat(80)}`
+    const output = serializeCalendar([{ ...allDayEvent, title }], options)
+    for (const line of output.split('\r\n')) {
+      expect(new TextEncoder().encode(line).byteLength).toBeLessThanOrEqual(75)
+    }
+    expect(firstEvent(output).getFirstPropertyValue('summary')).toBe(title)
+  })
 })

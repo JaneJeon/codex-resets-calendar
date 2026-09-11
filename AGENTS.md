@@ -7,12 +7,11 @@ full design rationale and history live on Linear issue JANE-240.
 
 One stateless Cloudflare Worker serving several iCalendar feeds, one per
 path. Feeds are derived from their upstream source and the serialized
-response is retained in Workers KV for outage fallback. No database, no
-cron, and no secret inside the Worker (the Cloudflare credentials in
-`.env` are for wrangler only). Today there is one calendar: Codex resets
-at `/codex-resets.ics`, built from two upstream GETs against
-`https://codex-resets.com`. No Telegram or Slack code — those are out of
-scope by design.
+response is retained in Workers KV for outage fallback. There is no cron and
+no secret inside the Worker (the Cloudflare credentials in `.env` are for
+wrangler only). Codex resets is served at `/codex-resets.ics`; Downtown San
+Mateo events is served at `/dtsm-events.ics` and uses D1 for normalized event
+storage. No Telegram or Slack code — those are out of scope by design.
 
 ## Calendars
 
@@ -49,6 +48,28 @@ is served indefinitely. KV read and write failures are logged and do not
 replace a valid live response. Cached and fallback responses retain the
 normal 15-minute `Cache-Control` header.
 
+Downtown San Mateo events uses `CALENDAR_DB` (D1) and the same
+`CALENDAR_CACHE` binding. A request-driven sync runs at most daily. It fetches
+all DSMA events from today onward (or from the start of an event still in
+progress), follows pagination, and atomically upserts only changed normalized
+event, venue, organizer, category, and relationship rows. It never backfills
+ended history: records accumulate only as the Worker sees them. Ended records
+are retained without being fetched again; future records missing from a
+successful snapshot are marked withdrawn. A D1 lease prevents concurrent
+requests from multiplying source traffic. The default feed filters in D1 by
+the six configured B Street and Central Park venue IDs. Source `image` objects
+are never normalized or persisted.
+
+DSMA `start_date` and `end_date` are authoritative
+`America/Los_Angeles` wall times. Ignore the API's inconsistent timezone and
+UTC fields. Timed events are converted from LA wall time to UTC with DST for
+their date. For all-day records, the source end date is inclusive and ICS
+`DTEND` is the following date. All runtime D1 reads and writes use Drizzle's
+direct D1 adapter. Its generic bulk-ingest helper uses SQLite JSON input to
+stay below D1's query and bound-parameter limits. Drizzle Kit generates the
+checked-in migrations and applies them remotely during deploy; Wrangler
+applies the same migrations to local D1.
+
 That header is what actually caches the feed. `wrangler.jsonc` enables
 Workers Cache (`"cache": { "enabled": true }`), so Cloudflare serves a
 cached response without running the Worker, honoring `Cache-Control`
@@ -80,8 +101,8 @@ each produces a feed that looks fine and is wrong:
    `ics` attributes and drop a bad URL from its one event. SUMMARY text
    goes in `title` (a missing title becomes "Untitled event"), and
    `timestamp` must be milliseconds (an ISO string is written verbatim
-   as an invalid DTSTAMP). The library folds lines by character, not by
-   75 octets; today's feed text is ASCII, so lines stay within 75 octets.
+   as an invalid DTSTAMP). The shared serializer corrects the library's
+   character-based folding to RFC-compliant 75-octet UTF-8 lines.
 4. Inventing a time: no midpoint between two bounds, no recentering, no
    start time derived from an upper bound. The one bounded exception is
    the 30-minute symmetric tolerance around `scheduled_for` (see below),

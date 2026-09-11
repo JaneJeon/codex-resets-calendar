@@ -5,10 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply CALENDAR_DB --local",
+    "db:migrate:remote": "drizzle-kit migrate",
     "test": "vitest run",
     "test:coverage": "vitest run --coverage",
     "test:e2e": "RUN_E2E=1 vitest run test/e2e",
     "lint": "run-s lint:*",
+    "lint:drizzle": "drizzle-kit check",
     "lint:prettier": "prettier --check .",
     "lint:typescript": "tsc --noEmit",
     "format": "prettier --write .",
@@ -21,6 +25,7 @@
     "@janejeon/prettier-config": "^2.0.0",
     "@types/node": "^24.13.4",
     "@vitest/coverage-istanbul": "^4.1.11",
+    "drizzle-kit": "^0.31.10",
     "husky": "^9.1.7",
     "ical.js": "^2.1.0",
     "lint-staged": "^15.2.10",
@@ -35,6 +40,11 @@
     "workerd@1.20260910.1": true
   },
   "dependencies": {
+    "date-fns": "^4.4.0",
+    "date-fns-tz": "^3.2.0",
+    "drizzle-orm": "^0.45.2",
+    "entities": "^8.1.0",
+    "html-to-text": "^10.0.1",
     "ics": "^3.12.0"
   }
 }

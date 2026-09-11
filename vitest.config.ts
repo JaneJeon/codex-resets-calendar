@@ -1,4 +1,4 @@
-import { cloudflareTest } from '@cloudflare/vitest-plugin'
+import { cloudflareTest, readD1Migrations } from '@cloudflare/vitest-plugin'
 import { configDefaults, defineConfig } from 'vitest/config'
 
 // The Worker needs no secrets, so don't let wrangler load .env (the Cloudflare
@@ -6,12 +6,15 @@ import { configDefaults, defineConfig } from 'vitest/config'
 // "Using secrets defined in .env" log on every test file.
 process.env.CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV ??= 'false'
 
+const d1Migrations = await readD1Migrations('./migrations')
+
 export default defineConfig({
   plugins: [
     cloudflareTest({
       wrangler: { configPath: './wrangler.jsonc' },
       miniflare: {
         bindings: {
+          TEST_D1_MIGRATIONS: d1Migrations,
           RUN_E2E: process.env.RUN_E2E ?? '',
           DEPLOYED_URL: process.env.DEPLOYED_URL ?? ''
         }
@@ -19,6 +22,7 @@ export default defineConfig({
     })
   ],
   test: {
+    setupFiles: ['./test/setup.ts'],
     // Agent worktrees under .claude/ carry their own copy of the test suite.
     exclude: [...configDefaults.exclude, '.claude/**'],
     // ics depends on yup, which imports named exports from CommonJS packages
@@ -29,7 +33,7 @@ export default defineConfig({
       optimizer: {
         ssr: {
           enabled: true,
-          include: ['ics']
+          include: ['html-to-text', 'ics']
         }
       }
     },
