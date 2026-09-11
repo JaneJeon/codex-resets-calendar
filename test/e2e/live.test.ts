@@ -53,7 +53,7 @@ describe.skipIf(!runE2E)('live upstream', () => {
     expect(response.status).toBe(200)
     const component = new ICAL.Component(ICAL.parse(await response.text()))
     expect(component.getAllSubcomponents('vevent').length).toBeGreaterThan(0)
-  })
+  }, 60_000)
 })
 
 describe.skipIf(!runE2E || !deployedUrl)('deployed feed', () => {

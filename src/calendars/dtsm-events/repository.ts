@@ -3,6 +3,7 @@ import {
   asc,
   eq,
   exists,
+  getTableColumns,
   gte,
   inArray,
   isNull,
@@ -10,7 +11,9 @@ import {
   min,
   sql
 } from 'drizzle-orm'
-import { drizzle } from 'drizzle-orm/d1'
+import type { BatchItem } from 'drizzle-orm/batch'
+import { drizzle, type DrizzleD1Database } from 'drizzle-orm/d1'
+import type { AnySQLiteTable } from 'drizzle-orm/sqlite-core'
 import {
   categories,
   eventCategories,
@@ -207,84 +210,54 @@ function chunks<T>(values: T[]): T[][] {
   return result
 }
 
-function jsonStatement(db: D1Database, sql: string, values: unknown[]) {
-  return db.prepare(sql).bind(JSON.stringify(values))
-}
-
 interface BulkTable {
-  table: string
-  columns: string[]
+  schema: AnySQLiteTable
   conflictColumns: string[]
   resetColumns?: string[]
 }
 
 const BULK_TABLES = {
   venues: {
-    table: 'dtsm_venues',
-    columns: [
-      'id',
-      'name',
-      'address',
-      'city',
-      'state_province',
-      'country',
-      'zip',
-      'url',
-      'modified_utc'
-    ],
+    schema: venues,
     conflictColumns: ['id']
   },
   organizers: {
-    table: 'dtsm_organizers',
-    columns: ['id', 'name', 'email', 'phone', 'website', 'url', 'modified_utc'],
+    schema: organizers,
     conflictColumns: ['id']
   },
   categories: {
-    table: 'dtsm_categories',
-    columns: ['id', 'name', 'slug', 'description'],
+    schema: categories,
     conflictColumns: ['id']
   },
   events: {
-    table: 'dtsm_events',
-    columns: [
-      'id',
-      'title',
-      'description_html',
-      'url',
-      'website',
-      'start_local',
-      'end_local',
-      'all_day',
-      'status',
-      'venue_id',
-      'created_utc',
-      'modified_utc'
-    ],
+    schema: events,
     conflictColumns: ['id'],
     resetColumns: ['withdrawn_at']
   },
   eventOrganizers: {
-    table: 'dtsm_event_organizers',
-    columns: ['event_id', 'organizer_id', 'position'],
+    schema: eventOrganizers,
     conflictColumns: ['event_id', 'organizer_id']
   },
   eventCategories: {
-    table: 'dtsm_event_categories',
-    columns: ['event_id', 'category_id', 'position'],
+    schema: eventCategories,
     conflictColumns: ['event_id', 'category_id']
   }
 } satisfies Record<keyof NormalizedSnapshot, BulkTable>
 
-function bulkUpsertSql(table: BulkTable): string {
-  const mutable = table.columns.filter(
-    column => !table.conflictColumns.includes(column)
+function bulkUpsertSelect(table: BulkTable, values: unknown[]) {
+  const columns = Object.values(getTableColumns(table.schema)).map(
+    column => column.name
   )
   const resetColumns = table.resetColumns ?? []
-  const insertColumns = [...table.columns, ...resetColumns]
-  const selected = [
-    ...table.columns.map(column => `json_extract(value, '$.${column}')`),
-    ...resetColumns.map(() => 'NULL')
-  ]
+  const mutable = columns.filter(
+    column =>
+      !table.conflictColumns.includes(column) && !resetColumns.includes(column)
+  )
+  const selected = columns.map(column =>
+    resetColumns.includes(column)
+      ? 'NULL'
+      : `json_extract(value, '$.${column}')`
+  )
   const assignments = [
     ...mutable.map(column => `${column}=excluded.${column}`),
     ...resetColumns.map(column => `${column}=NULL`)
@@ -293,18 +266,27 @@ function bulkUpsertSql(table: BulkTable): string {
     ...mutable.map(column => `${column} IS NOT excluded.${column}`),
     ...resetColumns.map(column => `${column} IS NOT NULL`)
   ]
-  return `INSERT INTO ${table.table} (${insertColumns.join(',')})
-    SELECT ${selected.join(',')} FROM json_each(?) WHERE TRUE
+  return sql
+    .raw(`SELECT ${selected.join(',')} FROM json_each(`)
+    .append(sql`${JSON.stringify(values)}`)
+    .append(
+      sql.raw(`) WHERE TRUE
     ON CONFLICT(${table.conflictColumns.join(',')}) DO UPDATE SET ${assignments.join(',')}
-    WHERE ${changed.join(' OR ')}`
+    WHERE ${changed.join(' OR ')}`)
+    )
 }
 
-function upsertStatements(db: D1Database, snapshot: NormalizedSnapshot) {
-  const statements: D1PreparedStatement[] = []
+function upsertStatements(
+  db: DrizzleD1Database,
+  snapshot: NormalizedSnapshot
+): BatchItem<'sqlite'>[] {
+  const statements: BatchItem<'sqlite'>[] = []
   for (const key of Object.keys(BULK_TABLES) as (keyof NormalizedSnapshot)[])
     for (const values of chunks(snapshot[key]))
       statements.push(
-        jsonStatement(db, bulkUpsertSql(BULK_TABLES[key]), values)
+        db
+          .insert(BULK_TABLES[key].schema)
+          .select(bulkUpsertSelect(BULK_TABLES[key], values))
       )
   return statements
 }
@@ -315,44 +297,47 @@ export async function persistSnapshot(
   nowSeconds: number,
   currentLocal: string
 ): Promise<void> {
+  const orm = drizzle(db)
   const snapshot = normalizeSnapshot(sourceEvents)
-  const eventIds = snapshot.events.map(event => event.id)
-  const statements = upsertStatements(db, snapshot)
+  const eventIds = sourceEvents.map(event => event.id)
+  const statements = upsertStatements(orm, snapshot)
   statements.push(
-    db
-      .prepare(
-        `DELETE FROM dtsm_event_organizers
-       WHERE event_id IN (SELECT value FROM json_each(?))
-         AND json_array(event_id, organizer_id) NOT IN
+    orm.delete(eventOrganizers).where(
+      and(
+        sql`${eventOrganizers.eventId} IN (SELECT value FROM json_each(${JSON.stringify(eventIds)}))`,
+        sql`json_array(${eventOrganizers.eventId}, ${eventOrganizers.organizerId}) NOT IN
              (SELECT json_array(json_extract(value, '$.event_id'), json_extract(value, '$.organizer_id'))
-                FROM json_each(?))`
+                FROM json_each(${JSON.stringify(snapshot.eventOrganizers)}))`
       )
-      .bind(JSON.stringify(eventIds), JSON.stringify(snapshot.eventOrganizers)),
-    db
-      .prepare(
-        `DELETE FROM dtsm_event_categories
-       WHERE event_id IN (SELECT value FROM json_each(?))
-         AND json_array(event_id, category_id) NOT IN
+    ),
+    orm.delete(eventCategories).where(
+      and(
+        sql`${eventCategories.eventId} IN (SELECT value FROM json_each(${JSON.stringify(eventIds)}))`,
+        sql`json_array(${eventCategories.eventId}, ${eventCategories.categoryId}) NOT IN
              (SELECT json_array(json_extract(value, '$.event_id'), json_extract(value, '$.category_id'))
-                FROM json_each(?))`
+                FROM json_each(${JSON.stringify(snapshot.eventCategories)}))`
       )
-      .bind(JSON.stringify(eventIds), JSON.stringify(snapshot.eventCategories)),
-    db
-      .prepare(
-        `UPDATE dtsm_events SET withdrawn_at = ?
-         WHERE withdrawn_at IS NULL AND end_local >= ?
-           AND id NOT IN (SELECT value FROM json_each(?))`
-      )
-      .bind(nowSeconds, currentLocal, JSON.stringify(eventIds)),
-    db
-      .prepare(
-        `UPDATE dtsm_sync_state
-         SET last_success_at = ?, next_attempt_at = ?, lease_until = 0
-         WHERE calendar = ?`
-      )
-      .bind(nowSeconds, nowSeconds + DAY_SECONDS, CALENDAR)
+    ),
+    orm
+      .update(events)
+      .set({ withdrawnAt: nowSeconds })
+      .where(
+        and(
+          isNull(events.withdrawnAt),
+          gte(events.endLocal, currentLocal),
+          sql`${events.id} NOT IN (SELECT value FROM json_each(${JSON.stringify(eventIds)}))`
+        )
+      ),
+    orm
+      .update(syncState)
+      .set({
+        lastSuccessAt: nowSeconds,
+        nextAttemptAt: nowSeconds + DAY_SECONDS,
+        leaseUntil: 0
+      })
+      .where(eq(syncState.calendar, CALENDAR))
   )
-  await db.batch(statements)
+  await orm.batch(statements as [BatchItem<'sqlite'>, ...BatchItem<'sqlite'>[]])
 }
 
 export async function readEvents(
