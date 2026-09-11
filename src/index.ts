@@ -1,12 +1,21 @@
 import { findCalendar } from './calendars/index.js'
 import { UpstreamError } from './errors.js'
-import { serializeCalendar } from './ics.js'
+import { serializeCalendar } from './lib/ics.js'
 
-// A failure must never be served from cache in place of a real feed.
 const NO_STORE = { 'Cache-Control': 'no-store' }
+const CONTENT_TYPE = 'text/calendar; charset=utf-8'
+
+function feedResponse(body: string, cacheTtlSeconds: number): Response {
+  return new Response(body, {
+    headers: {
+      'Content-Type': CONTENT_TYPE,
+      'Cache-Control': `public, max-age=${cacheTtlSeconds}`
+    }
+  })
+}
 
 export default {
-  async fetch(request: Request): Promise<Response> {
+  async fetch(request: Request, env: Env): Promise<Response> {
     const { pathname } = new URL(request.url)
     const calendar = findCalendar(pathname)
 
@@ -15,15 +24,12 @@ export default {
     }
 
     try {
-      const events = await calendar.buildEvents()
-      const body = serializeCalendar(events, { name: calendar.name })
-
-      return new Response(body, {
-        headers: {
-          'Content-Type': 'text/calendar; charset=utf-8',
-          'Cache-Control': `public, max-age=${calendar.cacheTtlSeconds}`
-        }
-      })
+      const body = calendar.buildResponse
+        ? await calendar.buildResponse(env)
+        : serializeCalendar(await calendar.buildEvents(), {
+            name: calendar.name
+          })
+      return feedResponse(body, calendar.cacheTtlSeconds)
     } catch (error: unknown) {
       if (error instanceof UpstreamError) {
         return new Response('Upstream unavailable', {

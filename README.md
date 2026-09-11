@@ -13,17 +13,19 @@ https://cal.janejeon.dev/codex-resets.ics
 
 ## What it does
 
-On every request to `/codex-resets.ics`, the Worker fetches the reset
-history and current status from the [Codex Resets](https://codex-resets.com)
-API and builds a calendar with no stored state:
+The Worker fetches the reset history and current status from the [Codex
+Resets](https://codex-resets.com) API and builds a calendar:
 
 - Every past reset, as an all-day event, `regular` or `banked` distinguishable.
 - A scheduled reset announcement, as a timed event when an instant is known,
   or an all-day event when only a date is known.
 - An active reset forecast, as an all-day event.
 
-There is no database, no cron, and no credentials. The feed is derived
-from the upstream API and cached at Cloudflare's edge for 15 minutes.
+There is no database, no cron, and no credentials in Worker code. The
+serialized response is cached at Cloudflare's edge for 15 minutes and
+retained in Workers KV with a one-hour freshness window. After that
+window the Worker refreshes upstream; if refresh fails, it serves the
+last successful response indefinitely.
 
 Active, time-sensitive delivery (forecasts with deadlines, reset
 confirmations) is handled by the tracker's own Telegram channel,
