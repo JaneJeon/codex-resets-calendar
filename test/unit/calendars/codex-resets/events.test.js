@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { addDays, buildEvents, laDate } from '../../src/events.js'
+import {
+  addDays,
+  buildEvents,
+  laDate
+} from '../../../../src/calendars/codex-resets/events.js'
 
 describe('laDate', () => {
   it('converts a PDT instant to its Los Angeles calendar date', () => {

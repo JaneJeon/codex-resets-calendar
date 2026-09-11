@@ -5,10 +5,35 @@ full design rationale and history live on Linear issue JANE-240.
 
 ## What this is
 
-One stateless Cloudflare Worker. It serves `text/calendar` at
-`/codex-resets.ics`, derived on every request from two upstream GETs
-against `https://codex-resets.com`. No database, no cron, no secret of
-any kind, no Telegram or Slack code — those are out of scope by design.
+One stateless Cloudflare Worker serving several iCalendar feeds, one per
+path, each derived on every request from its upstream source. No
+database, no cron, and no secret inside the Worker (the Cloudflare
+credentials in `.env` are for wrangler only). Today there is one
+calendar: Codex resets at `/codex-resets.ics`, built from two upstream
+GETs against `https://codex-resets.com`. No Telegram or Slack code —
+those are out of scope by design.
+
+## Calendars
+
+Each calendar lives in `src/calendars/<name>/` and default-exports
+`{ path, name, cacheTtlSeconds, buildEvents() }`. `buildEvents` resolves
+to `ics` event attributes and throws `UpstreamError` (`src/errors.js`)
+when its source fails. `src/calendars/index.js` is the registry.
+`src/index.js` routes an exact path match to its calendar; every other
+path, including `/`, is a 404.
+
+To add a calendar: create its folder, export that object, add it to the
+registry, and add tests under `test/unit/calendars/<name>/` and
+`test/integration/`. The registry test checks that paths are unique
+`.ics` paths and that TTLs are positive whole seconds.
+
+`cacheTtlSeconds` becomes `Cache-Control: public, max-age=<ttl>` on a
+successful response. Error responses always carry
+`Cache-Control: no-store`: an `UpstreamError` is a 502, and anything
+else (for example `ics` rejecting an event) is a logged 500.
+
+The sections from the danger list through Failure policy are specific
+to the Codex resets calendar (`src/calendars/codex-resets/`).
 
 ## The danger list
 
@@ -17,7 +42,8 @@ each produces a feed that looks fine and is wrong:
 
 1. Slicing a UTC timestamp to get a calendar date. 44% of the historical
    resets fall on a different day in `America/Los_Angeles` than in UTC.
-   Always convert to the LA date first (`laDate` in `src/events.js`).
+   Always convert to the LA date first (`laDate` in
+   `src/calendars/codex-resets/events.js`).
 2. All-day `DTEND` is exclusive. One day is `DTSTART;VALUE=DATE:20260907`
    with `DTEND;VALUE=DATE:20260908`.
 3. Hand-assembling ICS text. Serialization belongs to the `ics` library
@@ -67,17 +93,19 @@ part must match the deploy host exactly — changing it orphans every
 event already on a subscriber's calendar. A `scheduled_reset` shares its
 id with the eventual history entry (both are sourced from the same X
 post), so when it converts to a past reset the same UID takes over in
-place. `buildEvents` in `src/events.js` dedupes by UID and drops a
+place. `buildEvents` in `src/calendars/codex-resets/events.js` dedupes
+by UID and drops a
 `scheduled_reset` whose id already appears in history.
 
 ## Failure policy
 
-| Condition                                  | Response                                                             |
-| ------------------------------------------ | -------------------------------------------------------------------- |
-| `/resets` fails, times out, or returns 5xx | 502                                                                  |
-| `/resets` returns 200 with an empty array  | 502 (an empty calendar would tell subscribers to delete every event) |
-| `/resets` returns 429                      | 502, `Retry-After` logged, no retry                                  |
-| `/status` fails in any way                 | serve the history-only feed, `console.warn`                          |
+| Condition                                  | Response                                                                         |
+| ------------------------------------------ | -------------------------------------------------------------------------------- |
+| `/resets` fails, times out, or returns 5xx | 502, `no-store`                                                                  |
+| `/resets` returns 200 with an empty array  | 502, `no-store` (an empty calendar would tell subscribers to delete every event) |
+| `/resets` returns 429                      | 502, `no-store`, `Retry-After` logged, no retry                                  |
+| `/status` fails in any way                 | serve the history-only feed, `console.warn`                                      |
+| `ics` rejects an event                     | 500, `no-store`, `console.error`                                                 |
 
 ## Local setup and secrets
 
