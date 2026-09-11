@@ -1,0 +1,22 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+    "types": [
+      "./worker-configuration.d.ts",
+      "@cloudflare/vitest-plugin/types",
+      "node"
+    ],
+    "noEmit": true
+  },
+  "include": [
+    "src/**/*.ts",
+    "test/**/*.ts",
+    "drizzle.config.ts",
+    "vitest.config.ts",
+    "worker-configuration.d.ts"
+  ],
+  "exclude": ["node_modules"]
+}

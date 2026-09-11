@@ -1,1 +1,3 @@
-worker-configuration.d.ts
+backend/worker-configuration.d.ts
+**/coverage/
+**/dist/

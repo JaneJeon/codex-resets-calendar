@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Operational facts for this repo. Read this before changing `src/`. The
+Operational facts for this repo. Read this before changing `backend/src/`. The
 full design rationale and history live on Linear issue JANE-240.
 
 ## What this is
@@ -13,19 +13,24 @@ wrangler only). Codex resets is served at `/codex-resets.ics`; Downtown San
 Mateo events is served at `/dtsm-events.ics` and uses D1 for normalized event
 storage. No Telegram or Slack code — those are out of scope by design.
 
+The repository is an npm workspace orchestrated by Nx. The Worker lives in
+`backend/`, the Vite React application in `frontend/`, and the shared route
+contract in `shared/`. Shared changes affect both applications through their
+workspace dependencies.
+
 ## Calendars
 
-Each calendar lives in `src/calendars/<name>/` and default-exports
+Each calendar lives in `backend/src/calendars/<name>/` and default-exports
 `{ path, name, cacheTtlSeconds, responseCache?, buildEvents() }`.
 `buildEvents` resolves to `ics` event attributes and throws
-`UpstreamError` (`src/errors.ts`) when its source fails.
-`src/calendars/index.ts` is the registry.
-`src/index.ts` routes an exact path match to its calendar; every other
+`UpstreamError` (`backend/src/errors.ts`) when its source fails.
+`backend/src/calendars/index.ts` is the registry.
+`backend/src/index.ts` routes an exact path match to its calendar; every other
 path, including `/`, is a 404.
 
 To add a calendar: create its folder, export that object, add it to the
-registry, and add tests under `test/unit/calendars/<name>/` and
-`test/integration/`. The registry test checks that paths are unique
+registry, and add tests under `backend/test/unit/calendars/<name>/` and
+`backend/test/integration/`. The registry test checks that paths are unique
 `.ics` paths and that TTLs are positive whole seconds.
 
 `cacheTtlSeconds` becomes `Cache-Control: public, max-age=<ttl>` on a
@@ -34,8 +39,8 @@ successful response. Error responses always carry
 response is available, and anything else (for example `ics` rejecting
 an event) is a logged 500.
 
-Reusable response-cache mechanics live in `src/lib/response-cache.ts` and
-ICS serialization lives in `src/lib/ics.ts`. Every calendar returns event
+Reusable response-cache mechanics live in `backend/src/lib/response-cache.ts` and
+ICS serialization lives in `backend/src/lib/ics.ts`. Every calendar returns event
 attributes through `buildEvents`; a calendar can declaratively opt the shared
 serialization pipeline into retained-response caching with `responseCache`.
 
@@ -70,7 +75,7 @@ stay below D1's query and bound-parameter limits. Drizzle Kit generates the
 checked-in migrations and applies them remotely during deploy; Wrangler
 applies the same migrations to local D1.
 
-That header is what actually caches the feed. `wrangler.jsonc` enables
+That header is what actually caches the feed. `backend/wrangler.jsonc` enables
 Workers Cache (`"cache": { "enabled": true }`), so Cloudflare serves a
 cached response without running the Worker, honoring `Cache-Control`
 per RFC 9111. Without that block, the header alone caches nothing,
@@ -82,7 +87,7 @@ https://developers.cloudflare.com/workers/cache/configuration/ and
 https://developers.cloudflare.com/workers/cache/cache-keys/.
 
 The sections from the danger list through Failure policy are specific
-to the Codex resets calendar (`src/calendars/codex-resets/`).
+to the Codex resets calendar (`backend/src/calendars/codex-resets/`).
 
 ## The danger list
 
@@ -92,11 +97,11 @@ each produces a feed that looks fine and is wrong:
 1. Slicing a UTC timestamp to get a calendar date. 44% of the historical
    resets fall on a different day in `America/Los_Angeles` than in UTC.
    Always convert to the LA date first (`laDate` in
-   `src/calendars/codex-resets/events.js`).
+   `backend/src/calendars/codex-resets/events.ts`).
 2. All-day `DTEND` is exclusive. One day is `DTSTART;VALUE=DATE:20260907`
    with `DTEND;VALUE=DATE:20260908`.
 3. Hand-assembling ICS text. Serialization belongs to the `ics` library
-   (`src/lib/ics.ts`), and it validates strictly: an unknown attribute or an
+   (`backend/src/lib/ics.ts`), and it validates strictly: an unknown attribute or an
    invalid `url` fails the whole calendar. So event builders pass only
    `ics` attributes and drop a bad URL from its one event. SUMMARY text
    goes in `title` (a missing title becomes "Untitled event"), and
@@ -145,7 +150,7 @@ whole calendar. The suffix has followed the feed's host
 at a new URL anyway. A `scheduled_reset` shares its
 id with the eventual history entry (both are sourced from the same X
 post), so when it converts to a past reset the same UID takes over in
-place. `buildEvents` in `src/calendars/codex-resets/events.js` dedupes
+place. `buildEvents` in `backend/src/calendars/codex-resets/events.ts` dedupes
 by UID and drops a
 `scheduled_reset` whose id already appears in history.
 
@@ -188,7 +193,7 @@ commands that need them under `direnv exec . <command>`.
 Gotcha: wrangler also reads `.env` by itself, and in local development
 it loads those values into the Worker's `env`. The API token is
 therefore visible to Worker code under `wrangler dev`. Never read it
-from `env` in `src/`. Tests turn this off: `vitest.config.js` sets
+from `env` in `backend/src/`. Tests turn this off: `backend/vitest.config.ts` sets
 `CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV=false`, which also removes
 wrangler's "Using secrets defined in .env" log.
 
@@ -201,34 +206,34 @@ nothing about CI.
 ## Deploy
 
 Merging to master deploys; never deploy from a laptop.
-`.github/workflows/ci.yml` runs lint, tests, and
-`wrangler deploy --dry-run` on every push and PR. On a push to master,
-the `deploy` job runs `cloudflare/wrangler-action` with the
-`CLOUDFLARE_API_TOKEN` secret and the `CLOUDFLARE_ACCOUNT_ID` variable.
-It then waits for `https://cal.janejeon.dev/codex-resets.ics` to return
-200 and runs only the `deployed feed` e2e block against it. The
+`.github/workflows/ci.yml` runs Nx affected lint, coverage, and build
+targets on every push and PR. On a push to master, affected deployable
+projects run: backend D1 migrations precede the Worker deploy, and the
+frontend deploys its Vite static assets to `cal.janejeon.com`. It then
+waits for the backend feed to return 200 and runs only the `deployed feed`
+e2e block against it. There is no frontend HTTP smoke test. The
 live-upstream block is left out, so an upstream rate limit can't fail a
 deploy that already happened.
 
-Before merging a `src/` change, verify it locally: `npm run dev`, then
+Before merging a `backend/src/` change, verify it locally: `npm run dev`, then
 curl the feed and parse it.
 
-After any change to `src/`, update the Craft doc
+After any change to `backend/src/`, update the Craft doc
 `Codex reset watch — current setup` with what actually changed and
 what was verified, per that folder's README.
 
 ## Testing
 
-- Unit tests (`test/unit/`) cover the pure logic: LA-date conversion,
+- Unit tests (`backend/test/unit/`) cover the pure logic: LA-date conversion,
   all-day arithmetic, UID stability, and the serialized output parsed
   back with `ical.js`.
-- Integration tests (`test/integration/`) exercise
+- Integration tests (`backend/test/integration/`) exercise
   `exports.default.fetch()` from `cloudflare:workers` against a stubbed
   `globalThis.fetch`, covering routing and the failure table above.
-- E2E tests (`test/e2e/`) hit the real API and, if `DEPLOYED_URL` is
+- E2E tests (`backend/test/e2e/`) hit the real API and, if `DEPLOYED_URL` is
   set, the deployed Worker. Gated behind `RUN_E2E=1` so a normal
   `npm test` run stays offline and green.
-- Fixtures in `test/fixtures/` are captured upstream responses.
+- Fixtures in `backend/test/fixtures/` are captured upstream responses.
   `resets.json` is a real capture; assert **at least** its event count,
   not exactly, since history grows. `status-scheduled.json` and
   `status-watch.json` are hand-built, because live `/status` returned
