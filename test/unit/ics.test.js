@@ -1,118 +1,95 @@
+import ICAL from 'ical.js'
 import { describe, expect, it } from 'vitest'
-import { escapeText, foldLine, serializeCalendar } from '../../src/ics.js'
+import { serializeCalendar } from '../../src/ics.js'
 
-describe('escapeText', () => {
-  it('escapes backslash, semicolon, comma, and newline', () => {
-    expect(escapeText('a\\b;c,d\ne')).toBe('a\\\\b\\;c\\,d\\ne')
-  })
+const stamp = Date.parse('2026-09-07T18:00:00.000Z')
 
-  it('does not escape a colon', () => {
-    expect(escapeText('https://example.com/a:b')).toBe(
-      'https://example.com/a:b'
-    )
-  })
+const allDayEvent = {
+  uid: 'all-day@example.com',
+  title: 'Codex Reset',
+  categories: ['regular'],
+  description: 'https://x.com/a/1,2',
+  url: 'https://x.com/a/1',
+  start: [2026, 9, 7],
+  end: [2026, 9, 8],
+  timestamp: stamp,
+  lastModified: stamp,
+  transp: 'TRANSPARENT'
+}
 
-  it('escapes a comma inside a URL used as TEXT', () => {
-    expect(escapeText('https://x.com/status/1,2')).toBe(
-      'https://x.com/status/1\\,2'
-    )
-  })
-})
+const timedEvent = {
+  uid: 'timed@example.com',
+  title: 'Codex Reset announced',
+  categories: ['scheduled'],
+  start: Date.parse('2026-09-15T17:30:00.000Z'),
+  startInputType: 'utc',
+  startOutputType: 'utc',
+  end: Date.parse('2026-09-15T18:30:00.000Z'),
+  timestamp: stamp,
+  lastModified: stamp,
+  transp: 'TRANSPARENT'
+}
 
-describe('foldLine', () => {
-  it('leaves a short line unfolded', () => {
-    const line = 'SUMMARY:Codex reset'
-    expect(foldLine(line)).toBe(line)
-  })
+const options = { name: 'Codex Resets' }
 
-  it('folds a long ASCII line at 75 octets with a leading space continuation', () => {
-    const value = 'x'.repeat(120)
-    const line = `SUMMARY:${value}`
-    const folded = foldLine(line)
-    const physicalLines = folded.split('\r\n')
-
-    expect(physicalLines.length).toBeGreaterThan(1)
-    for (const [index, physical] of physicalLines.entries()) {
-      const byteLength = new TextEncoder().encode(physical).length
-      expect(byteLength).toBeLessThanOrEqual(75)
-      if (index > 0) expect(physical.startsWith(' ')).toBe(true)
-    }
-
-    const unfolded = physicalLines
-      .map((l, i) => (i === 0 ? l : l.slice(1)))
-      .join('')
-    expect(unfolded).toBe(line)
-  })
-
-  it('does not split a multi-byte character across a fold boundary', () => {
-    const value = 'é'.repeat(60) // 2-byte UTF-8 character, 120 bytes total
-    const line = `DESCRIPTION:${value}`
-    const folded = foldLine(line)
-    const physicalLines = folded.split('\r\n')
-
-    for (const physical of physicalLines) {
-      const bytes = new TextEncoder().encode(physical)
-      expect(bytes.length).toBeLessThanOrEqual(75)
-      // Every physical line must itself be valid UTF-8 (no lone continuation byte).
-      expect(() =>
-        new TextDecoder('utf-8', { fatal: true }).decode(bytes)
-      ).not.toThrow()
-    }
-
-    const unfolded = physicalLines
-      .map((l, i) => (i === 0 ? l : l.slice(1)))
-      .join('')
-    expect(unfolded).toBe(line)
-  })
-})
+function firstEvent(output) {
+  return new ICAL.Component(ICAL.parse(output)).getFirstSubcomponent('vevent')
+}
 
 describe('serializeCalendar', () => {
-  const baseEvent = {
-    uid: 'abc@codex-resets-calendar.janejeon.workers.dev',
-    summary: 'Codex reset',
-    categories: ['regular'],
-    description: 'https://x.com/a/1',
-    url: 'https://x.com/a/1',
-    allDay: true,
-    startDate: '20260907',
-    endDate: '20260908',
-    dtstamp: '2026-09-07T18:00:00.000Z'
-  }
-
   it('uses CRLF line endings throughout', () => {
-    const output = serializeCalendar([baseEvent])
-    expect(output.includes('\n')).toBe(true)
-    expect(
-      output.split('\r\n').every(line => !line.includes('\n') || line === '')
-    ).toBe(true)
+    const output = serializeCalendar([allDayEvent], options)
     expect(output.startsWith('BEGIN:VCALENDAR\r\n')).toBe(true)
+    expect(output.replaceAll('\r\n', '')).not.toMatch(/[\r\n]/)
   })
 
-  it('all-day DTEND is exactly one day after DTSTART', () => {
-    const output = serializeCalendar([baseEvent])
+  it('names the calendar', () => {
+    const output = serializeCalendar([allDayEvent], options)
+    const calendar = new ICAL.Component(ICAL.parse(output))
+    expect(calendar.getFirstPropertyValue('x-wr-calname')).toBe('Codex Resets')
+  })
+
+  it('renders an all-day event as DATE values with an exclusive DTEND', () => {
+    const output = serializeCalendar([allDayEvent], options)
     expect(output).toContain('DTSTART;VALUE=DATE:20260907')
     expect(output).toContain('DTEND;VALUE=DATE:20260908')
+
+    const event = firstEvent(output)
+    expect(event.getFirstProperty('dtstart').type).toBe('date')
+    expect(event.getFirstPropertyValue('dtstart').toString()).toBe('2026-09-07')
+    expect(event.getFirstPropertyValue('dtend').toString()).toBe('2026-09-08')
   })
 
-  it("DTSTAMP is derived from the event's own timestamp, not the wall clock", () => {
-    const first = serializeCalendar([baseEvent])
-    const second = serializeCalendar([baseEvent])
-    const extract = output => output.match(/DTSTAMP:(\S+)/)[1]
-    expect(extract(first)).toBe(extract(second))
-    expect(extract(first)).toBe('20260907T180000Z')
+  it('renders a timed event in UTC', () => {
+    const output = serializeCalendar([timedEvent], options)
+    expect(output).toContain('DTSTART:20260915T173000Z')
+    expect(output).toContain('DTEND:20260915T183000Z')
   })
 
-  it('omits DESCRIPTION when the event has no URL', () => {
-    const output = serializeCalendar([
-      { ...baseEvent, description: undefined, url: undefined }
-    ])
-    expect(output).not.toContain('DESCRIPTION:')
+  it('carries SUMMARY, CATEGORIES, TRANSP, URL, and an escaped DESCRIPTION', () => {
+    const output = serializeCalendar([allDayEvent], options)
+    expect(output).toContain('DESCRIPTION:https://x.com/a/1\\,2')
+
+    const event = firstEvent(output)
+    expect(event.getFirstPropertyValue('summary')).toBe('Codex Reset')
+    expect(event.getFirstPropertyValue('categories')).toBe('regular')
+    expect(event.getFirstPropertyValue('transp')).toBe('TRANSPARENT')
+    expect(event.getFirstPropertyValue('url')).toBe('https://x.com/a/1')
+    expect(event.getFirstPropertyValue('description')).toBe(
+      'https://x.com/a/1,2'
+    )
   })
 
-  it('does not escape the URL property', () => {
-    const output = serializeCalendar([
-      { ...baseEvent, url: 'https://x.com/a/1,2', description: undefined }
-    ])
-    expect(output).toContain('URL:https://x.com/a/1,2')
+  it("DTSTAMP comes from the event's own timestamp, not the wall clock", () => {
+    const first = serializeCalendar([allDayEvent], options)
+    const second = serializeCalendar([allDayEvent], options)
+    expect(first).toBe(second)
+    expect(first).toContain('DTSTAMP:20260907T180000Z')
+  })
+
+  it('throws when the library rejects an event', () => {
+    expect(() =>
+      serializeCalendar([{ ...allDayEvent, url: 'not a url' }], options)
+    ).toThrow()
   })
 })

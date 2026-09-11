@@ -1,8 +1,17 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "codex-resets-calendar",
+  "name": "calendars",
   "main": "src/index.js",
   "compatibility_date": "2026-09-08",
+  // Feeds are served only from cal.janejeon.com/<path>. The custom domain makes
+  // Cloudflare create the DNS record and certificate on deploy.
+  "workers_dev": false,
+  "routes": [{ "pattern": "cal.janejeon.com", "custom_domain": true }],
+  // Workers Cache: serve cached responses without running the Worker, per
+  // each response's Cache-Control. See AGENTS.md, Calendars.
+  "cache": {
+    "enabled": true
+  },
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1

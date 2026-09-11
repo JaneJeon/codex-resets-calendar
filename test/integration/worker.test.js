@@ -26,13 +26,9 @@ afterEach(() => {
 })
 
 describe('routing', () => {
-  it('redirects / to the feed path', async () => {
-    mockFetch(async () => jsonResponse(resetsFixture))
-    const response = await exports.default.fetch('http://example.com/', {
-      redirect: 'manual'
-    })
-    expect(response.status).toBe(302)
-    expect(response.headers.get('Location')).toContain('/codex-resets.ics')
+  it('returns 404 at / because there is no single feed to redirect to', async () => {
+    const response = await exports.default.fetch('http://example.com/')
+    expect(response.status).toBe(404)
   })
 
   it('returns 404 for an unknown path', async () => {
@@ -58,9 +54,7 @@ describe('the feed', () => {
     expect(response.headers.get('Content-Type')).toBe(
       'text/calendar; charset=utf-8'
     )
-    expect(response.headers.get('Cache-Control')).toBe(
-      'public, max-age=300, s-maxage=300'
-    )
+    expect(response.headers.get('Cache-Control')).toBe('public, max-age=900')
 
     const body = await response.text()
     expect(body.startsWith('BEGIN:VCALENDAR\r\n')).toBe(true)
@@ -85,7 +79,8 @@ describe('the feed', () => {
     expect(body).toContain('BEGIN:VEVENT')
   })
 
-  it('returns 502 when /resets returns a 5xx', async () => {
+  it('returns 502 without caching when /resets returns a 5xx', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     mockFetch(async input => {
       const url = String(input)
       if (url.includes('/api/v1/resets'))
@@ -97,6 +92,49 @@ describe('the feed', () => {
       'http://example.com/codex-resets.ics'
     )
     expect(response.status).toBe(502)
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+  })
+
+  it('returns 502 when the /resets request itself fails', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mockFetch(async () => {
+      throw new TypeError('network down')
+    })
+
+    const response = await exports.default.fetch(
+      'http://example.com/codex-resets.ics'
+    )
+    expect(response.status).toBe(502)
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+    expect(errorSpy).toHaveBeenCalledWith(
+      'resets fetch failed',
+      expect.any(TypeError)
+    )
+  })
+
+  it('returns 500 without caching when the feed cannot be serialized', async () => {
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const unserializable = {
+      ...resetsFixture,
+      data: [{ ...resetsFixture.data[0], reset_type: 42 }]
+    }
+    mockFetch(async input => {
+      const url = String(input)
+      if (url.includes('/api/v1/resets')) return jsonResponse(unserializable)
+      if (url.includes('/api/v1/status'))
+        return jsonResponse(statusEmptyFixture)
+      throw new Error(`unexpected fetch: ${url}`)
+    })
+
+    const response = await exports.default.fetch(
+      'http://example.com/codex-resets.ics'
+    )
+    expect(response.status).toBe(500)
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Codex Resets feed failed',
+      expect.anything()
+    )
   })
 
   it('returns 502 when /resets returns 200 with an empty array', async () => {

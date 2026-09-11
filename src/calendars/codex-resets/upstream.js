@@ -1,14 +1,7 @@
+import { UpstreamError } from '../../errors.js'
+
 const BASE_URL = 'https://codex-resets.com'
 const MAX_PAGES = 10
-
-export class UpstreamError extends Error {
-  constructor(message, options = {}) {
-    super(message)
-    this.name = 'UpstreamError'
-    this.status = options.status
-    this.retryAfter = options.retryAfter
-  }
-}
 
 export async function fetchResets(baseUrl = BASE_URL) {
   const results = []

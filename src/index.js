@@ -1,48 +1,38 @@
-import { fetchResets, fetchStatus } from './upstream.js'
-import { buildEvents } from './events.js'
+import { findCalendar } from './calendars/index.js'
+import { UpstreamError } from './errors.js'
 import { serializeCalendar } from './ics.js'
 
-const FEED_PATH = '/codex-resets.ics'
+// A failure must never be served from cache in place of a real feed.
+const NO_STORE = { 'Cache-Control': 'no-store' }
 
 export default {
   async fetch(request) {
-    const url = new URL(request.url)
+    const { pathname } = new URL(request.url)
+    const calendar = findCalendar(pathname)
 
-    if (url.pathname === '/') {
-      return Response.redirect(new URL(FEED_PATH, url), 302)
-    }
-
-    if (url.pathname !== FEED_PATH) {
+    if (!calendar) {
       return new Response('Not found', { status: 404 })
     }
 
-    let resets
     try {
-      resets = await fetchResets()
+      const events = await calendar.buildEvents()
+      const body = serializeCalendar(events, { name: calendar.name })
+
+      return new Response(body, {
+        headers: {
+          'Content-Type': 'text/calendar; charset=utf-8',
+          'Cache-Control': `public, max-age=${calendar.cacheTtlSeconds}`
+        }
+      })
     } catch (error) {
-      if (error.status === 429) {
-        console.error('resets rate limited', { retryAfter: error.retryAfter })
-      } else {
-        console.error('resets fetch failed', error)
+      if (error instanceof UpstreamError) {
+        return new Response('Upstream unavailable', {
+          status: 502,
+          headers: NO_STORE
+        })
       }
-      return new Response('Upstream unavailable', { status: 502 })
+      console.error(`${calendar.name} feed failed`, error)
+      return new Response('Internal error', { status: 500, headers: NO_STORE })
     }
-
-    let status = {}
-    try {
-      status = await fetchStatus()
-    } catch (error) {
-      console.warn('status fetch failed, serving history-only feed', error)
-    }
-
-    const events = buildEvents(resets, status)
-    const body = serializeCalendar(events)
-
-    return new Response(body, {
-      headers: {
-        'Content-Type': 'text/calendar; charset=utf-8',
-        'Cache-Control': 'public, max-age=300, s-maxage=300'
-      }
-    })
   }
 }
