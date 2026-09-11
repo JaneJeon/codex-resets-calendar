@@ -9,18 +9,22 @@
     "test:e2e": "RUN_E2E=1 vitest run test/e2e",
     "lint": "run-s lint:*",
     "lint:prettier": "prettier --check .",
+    "lint:typescript": "tsc --noEmit",
     "format": "prettier --write .",
+    "types": "CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV=false wrangler types",
     "prepare": "husky"
   },
   "devDependencies": {
     "@aetherball/swarp": "^0.4.0",
     "@cloudflare/vitest-plugin": "^1.1.7",
     "@janejeon/prettier-config": "^2.0.0",
+    "@types/node": "^24.13.4",
     "husky": "^9.1.7",
     "ical.js": "^2.1.0",
     "lint-staged": "^15.2.10",
     "npm-run-all2": "^9.0.3",
     "prettier": "^3.3.3",
+    "typescript": "^5.7.2",
     "vitest": "^4.1.0",
     "wrangler": "^4.131.0"
   },

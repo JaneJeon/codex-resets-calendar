@@ -5,7 +5,7 @@ import statusEmptyFixture from '../fixtures/status-empty.json'
 import statusScheduledFixture from '../fixtures/status-scheduled.json'
 import statusWatchFixture from '../fixtures/status-watch.json'
 
-function jsonResponse(body, init = {}) {
+function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(body), {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
@@ -13,7 +13,7 @@ function jsonResponse(body, init = {}) {
   })
 }
 
-function mockFetch(handler) {
+function mockFetch(handler: typeof fetch): void {
   vi.stubGlobal('fetch', vi.fn(handler))
 }
 
@@ -254,7 +254,7 @@ describe('the feed', () => {
         ...statusScheduledFixture.data,
         scheduled_reset: {
           ...statusScheduledFixture.data.scheduled_reset,
-          id: resetsFixture.data[0].id
+          id: resetsFixture.data[0]!.id
         }
       },
       meta: statusScheduledFixture.meta
@@ -270,7 +270,7 @@ describe('the feed', () => {
       'http://example.com/codex-resets.ics'
     )
     const body = await response.text()
-    const uidCount = body.split(`UID:${resetsFixture.data[0].id}@`).length - 1
+    const uidCount = body.split(`UID:${resetsFixture.data[0]!.id}@`).length - 1
     expect(uidCount).toBe(1)
   })
 })

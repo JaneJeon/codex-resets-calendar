@@ -3,8 +3,66 @@ import { UpstreamError } from '../../errors.js'
 const BASE_URL = 'https://codex-resets.com'
 const MAX_PAGES = 10
 
-export async function fetchResets(baseUrl = BASE_URL) {
-  const results = []
+export type ResetType = 'regular' | 'banked'
+
+export interface Source {
+  type?: string
+  author?: string
+  url?: unknown
+}
+
+export interface Reset {
+  id: string
+  reset_type: ResetType
+  announced_at: string
+  text?: string
+  source?: Source
+}
+
+export interface ScheduledReset {
+  id: string
+  status: string
+  reset_type: ResetType
+  announced_at: string
+  scheduled_for: string | null
+  text?: string
+  source?: Source
+}
+
+export interface ActiveWatch {
+  level: string
+  reset_chance_percent?: number | null
+  forecast_window?: string
+  observed_at: string
+  expires_at: string
+  text?: string
+  source?: Source
+}
+
+export interface ResetsResponse {
+  data: Reset[]
+  pagination?: {
+    has_more?: boolean
+    next_cursor?: string | null
+  }
+}
+
+export interface StatusResponse {
+  data: {
+    scheduled_reset: ScheduledReset | null
+    active_watch: ActiveWatch | null
+  }
+}
+
+export interface Status {
+  scheduled_reset?: ScheduledReset | null
+  active_watch?: ActiveWatch | null
+}
+
+export async function fetchResets(
+  baseUrl: string = BASE_URL
+): Promise<Reset[]> {
+  const results: Reset[] = []
   let cursor
 
   for (let page = 0; page < MAX_PAGES; page += 1) {
@@ -26,7 +84,7 @@ export async function fetchResets(baseUrl = BASE_URL) {
       })
     }
 
-    const body = await response.json()
+    const body = (await response.json()) as ResetsResponse
     results.push(...body.data)
 
     if (!body.pagination?.has_more || !body.pagination?.next_cursor) break
@@ -40,7 +98,7 @@ export async function fetchResets(baseUrl = BASE_URL) {
   return results
 }
 
-export async function fetchStatus(baseUrl = BASE_URL) {
+export async function fetchStatus(baseUrl: string = BASE_URL): Promise<Status> {
   const url = new URL('/api/v1/status', baseUrl)
   const response = await fetch(url.toString())
 
@@ -50,7 +108,7 @@ export async function fetchStatus(baseUrl = BASE_URL) {
     })
   }
 
-  const body = await response.json()
+  const body = (await response.json()) as StatusResponse
   return {
     scheduled_reset: body.data.scheduled_reset,
     active_watch: body.data.active_watch

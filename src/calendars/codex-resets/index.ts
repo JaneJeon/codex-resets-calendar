@@ -1,6 +1,6 @@
 import { UpstreamError } from '../../errors.js'
 import { buildEvents } from './events.js'
-import { fetchResets, fetchStatus } from './upstream.js'
+import { fetchResets, fetchStatus, type Status } from './upstream.js'
 
 export default {
   path: '/codex-resets.ics',
@@ -11,8 +11,8 @@ export default {
     let resets
     try {
       resets = await fetchResets()
-    } catch (error) {
-      if (error.status === 429) {
+    } catch (error: unknown) {
+      if (error instanceof UpstreamError && error.status === 429) {
         console.error('resets rate limited', { retryAfter: error.retryAfter })
       } else {
         console.error('resets fetch failed', error)
@@ -22,10 +22,10 @@ export default {
         : new UpstreamError('resets fetch failed')
     }
 
-    let status = {}
+    let status: Status = {}
     try {
       status = await fetchStatus()
-    } catch (error) {
+    } catch (error: unknown) {
       console.warn('status fetch failed, serving history-only feed', error)
     }
 

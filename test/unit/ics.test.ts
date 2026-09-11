@@ -1,10 +1,11 @@
 import ICAL from 'ical.js'
 import { describe, expect, it } from 'vitest'
+import type { CalendarEvent } from '../../src/ics.js'
 import { serializeCalendar } from '../../src/ics.js'
 
 const stamp = Date.parse('2026-09-07T18:00:00.000Z')
 
-const allDayEvent = {
+const allDayEvent: CalendarEvent = {
   uid: 'all-day@example.com',
   title: 'Codex Reset',
   categories: ['regular'],
@@ -17,7 +18,7 @@ const allDayEvent = {
   transp: 'TRANSPARENT'
 }
 
-const timedEvent = {
+const timedEvent: CalendarEvent = {
   uid: 'timed@example.com',
   title: 'Codex Reset announced',
   categories: ['scheduled'],
@@ -32,8 +33,8 @@ const timedEvent = {
 
 const options = { name: 'Codex Resets' }
 
-function firstEvent(output) {
-  return new ICAL.Component(ICAL.parse(output)).getFirstSubcomponent('vevent')
+function firstEvent(output: string): ICAL.Component {
+  return new ICAL.Component(ICAL.parse(output)).getFirstSubcomponent('vevent')!
 }
 
 describe('serializeCalendar', () => {
@@ -55,9 +56,11 @@ describe('serializeCalendar', () => {
     expect(output).toContain('DTEND;VALUE=DATE:20260908')
 
     const event = firstEvent(output)
-    expect(event.getFirstProperty('dtstart').type).toBe('date')
-    expect(event.getFirstPropertyValue('dtstart').toString()).toBe('2026-09-07')
-    expect(event.getFirstPropertyValue('dtend').toString()).toBe('2026-09-08')
+    expect(event.getFirstProperty('dtstart')!.type).toBe('date')
+    expect(event.getFirstPropertyValue('dtstart')!.toString()).toBe(
+      '2026-09-07'
+    )
+    expect(event.getFirstPropertyValue('dtend')!.toString()).toBe('2026-09-08')
   })
 
   it('renders a timed event in UTC', () => {
