@@ -5,7 +5,7 @@ import { fetchResets, fetchStatus } from './upstream.js'
 export default {
   path: '/codex-resets.ics',
   name: 'Codex Resets',
-  cacheTtlSeconds: 5 * 60,
+  cacheTtlSeconds: 15 * 60,
 
   async buildEvents() {
     let resets

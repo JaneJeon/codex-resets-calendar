@@ -22,8 +22,7 @@ API and builds a calendar with no stored state:
 - An active reset forecast, as an all-day event.
 
 There is no database, no cron, and no credentials. The feed is derived
-fresh from the upstream API on each request, subject to Cloudflare's
-edge cache and the response's own `Cache-Control` header.
+from the upstream API and cached at Cloudflare's edge for 15 minutes.
 
 Active, time-sensitive delivery (forecasts with deadlines, reset
 confirmations) is handled by the tracker's own Telegram channel,

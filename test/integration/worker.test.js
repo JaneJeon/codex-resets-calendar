@@ -54,7 +54,7 @@ describe('the feed', () => {
     expect(response.headers.get('Content-Type')).toBe(
       'text/calendar; charset=utf-8'
     )
-    expect(response.headers.get('Cache-Control')).toBe('public, max-age=300')
+    expect(response.headers.get('Cache-Control')).toBe('public, max-age=900')
 
     const body = await response.text()
     expect(body.startsWith('BEGIN:VCALENDAR\r\n')).toBe(true)

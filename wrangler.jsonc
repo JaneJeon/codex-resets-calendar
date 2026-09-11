@@ -3,6 +3,11 @@
   "name": "codex-resets-calendar",
   "main": "src/index.js",
   "compatibility_date": "2026-09-08",
+  // Workers Cache: serve cached responses without running the Worker, per
+  // each response's Cache-Control. See AGENTS.md, Calendars.
+  "cache": {
+    "enabled": true
+  },
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1

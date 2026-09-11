@@ -32,6 +32,17 @@ successful response. Error responses always carry
 `Cache-Control: no-store`: an `UpstreamError` is a 502, and anything
 else (for example `ics` rejecting an event) is a logged 500.
 
+That header is what actually caches the feed. `wrangler.jsonc` enables
+Workers Cache (`"cache": { "enabled": true }`), so Cloudflare serves a
+cached response without running the Worker, honoring `Cache-Control`
+per RFC 9111. Without that block, the header alone caches nothing,
+because a Worker runs in front of the zone cache. The cache key is the
+request path and query string plus the Worker version, not the host:
+every deploy starts cold, and all hostnames share one cache. Codex
+resets is cached for 15 minutes. Sources:
+https://developers.cloudflare.com/workers/cache/configuration/ and
+https://developers.cloudflare.com/workers/cache/cache-keys/.
+
 The sections from the danger list through Failure policy are specific
 to the Codex resets calendar (`src/calendars/codex-resets/`).
 
