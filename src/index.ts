@@ -6,7 +6,7 @@ import { serializeCalendar } from './ics.js'
 const NO_STORE = { 'Cache-Control': 'no-store' }
 
 export default {
-  async fetch(request) {
+  async fetch(request: Request): Promise<Response> {
     const { pathname } = new URL(request.url)
     const calendar = findCalendar(pathname)
 
@@ -24,7 +24,7 @@ export default {
           'Cache-Control': `public, max-age=${calendar.cacheTtlSeconds}`
         }
       })
-    } catch (error) {
+    } catch (error: unknown) {
       if (error instanceof UpstreamError) {
         return new Response('Upstream unavailable', {
           status: 502,

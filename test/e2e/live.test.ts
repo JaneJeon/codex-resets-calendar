@@ -2,8 +2,12 @@ import { env, exports } from 'cloudflare:workers'
 import ICAL from 'ical.js'
 import { describe, expect, it } from 'vitest'
 
-const runE2E = env.RUN_E2E === '1'
-const deployedUrl = env.DEPLOYED_URL
+const testEnv = env as typeof env & {
+  RUN_E2E?: string
+  DEPLOYED_URL?: string
+}
+const runE2E = testEnv.RUN_E2E === '1'
+const deployedUrl = testEnv.DEPLOYED_URL
 
 describe.skipIf(!runE2E)('live upstream', () => {
   it('builds a valid feed from the real API with at least 52 events', async () => {
@@ -28,10 +32,16 @@ describe.skipIf(!runE2E)('live upstream', () => {
     for (const event of events) {
       const dtstart = event.getFirstProperty('dtstart')
       if (dtstart?.getParameter('value') !== 'DATE') continue
-      const start = event.getFirstPropertyValue('dtstart')
-      const end = event.getFirstPropertyValue('dtend')
+      const start = event.getFirstPropertyValue('dtstart') as {
+        toJSDate(): Date
+      } | null
+      const end = event.getFirstPropertyValue('dtend') as {
+        toJSDate(): Date
+      } | null
+      if (!start || !end) continue
       const diffDays =
-        (end.toJSDate() - start.toJSDate()) / (24 * 60 * 60 * 1000)
+        (end.toJSDate().getTime() - start.toJSDate().getTime()) /
+        (24 * 60 * 60 * 1000)
       expect(diffDays).toBeGreaterThanOrEqual(1)
     }
   })
@@ -40,7 +50,7 @@ describe.skipIf(!runE2E)('live upstream', () => {
 describe.skipIf(!runE2E || !deployedUrl)('deployed feed', () => {
   it('serves a valid feed from the deployed URL', async () => {
     // The zone blocks requests without a User-Agent (AGENTS.md, Domain).
-    const response = await fetch(deployedUrl, {
+    const response = await fetch(deployedUrl!, {
       headers: { 'User-Agent': 'calendars-smoke-test' }
     })
     expect(response.status).toBe(200)

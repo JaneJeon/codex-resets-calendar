@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import type {
+  Reset,
+  Status
+} from '../../../../src/calendars/codex-resets/upstream.js'
 import {
   addDays,
   buildEvents,
@@ -34,7 +38,7 @@ describe('addDays', () => {
 })
 
 describe('buildEvents', () => {
-  const resets = [
+  const resets: Reset[] = [
     {
       id: 'r1',
       reset_type: 'regular',
@@ -53,8 +57,8 @@ describe('buildEvents', () => {
 
   it('distinguishes regular and banked past resets', () => {
     const events = buildEvents(resets, {})
-    const regular = events.find(e => e.uid.startsWith('r1@'))
-    const banked = events.find(e => e.uid.startsWith('r2@'))
+    const regular = events.find(e => e.uid?.startsWith('r1@'))!
+    const banked = events.find(e => e.uid?.startsWith('r2@'))!
     expect(regular.categories).toEqual(['regular'])
     expect(regular.title).toBe('Codex Reset')
     expect(banked.categories).toEqual(['banked'])
@@ -63,7 +67,7 @@ describe('buildEvents', () => {
 
   it('stamps an event from its source timestamp in milliseconds', () => {
     const events = buildEvents(resets, {})
-    const regular = events.find(e => e.uid.startsWith('r1@'))
+    const regular = events.find(e => e.uid?.startsWith('r1@'))!
     expect(regular.timestamp).toBe(Date.parse('2026-09-01T18:00:00.000Z'))
     expect(regular.lastModified).toBe(regular.timestamp)
   })
@@ -84,9 +88,9 @@ describe('buildEvents', () => {
         }
       },
       active_watch: null
-    }
+    } satisfies Status
     const events = buildEvents(resets, status)
-    const scheduled = events.find(e => e.uid.startsWith('s1@'))
+    const scheduled = events.find(e => e.uid?.startsWith('s1@'))!
     expect(scheduled.start).toBe(Date.parse('2026-09-10T18:30:00.000Z'))
     expect(scheduled.end).toBe(Date.parse('2026-09-10T19:30:00.000Z'))
     expect(scheduled.startOutputType).toBe('utc')
@@ -108,11 +112,11 @@ describe('buildEvents', () => {
         }
       },
       active_watch: null
-    }
+    } satisfies Status
     const events = buildEvents(resets, status)
     const matching = events.filter(e => e.uid === 'r1@cal.janejeon.dev')
     expect(matching).toHaveLength(1)
-    expect(matching[0].title).toBe('Codex Reset')
+    expect(matching[0]!.title).toBe('Codex Reset')
   })
 
   it('renders a watch spanning two Los Angeles days with DTEND two days after DTSTART', () => {
@@ -127,9 +131,9 @@ describe('buildEvents', () => {
         text: 'watch',
         source: { type: 'observed' }
       }
-    }
+    } satisfies Status
     const events = buildEvents(resets, status)
-    const watch = events.find(e => e.uid.startsWith('watch-'))
+    const watch = events.find(e => e.uid?.startsWith('watch-'))!
     expect(watch.start).toEqual([2026, 9, 7])
     expect(watch.end).toEqual([2026, 9, 9])
     expect(watch.title).toBe('Codex Reset forecast (elevated, 62%)')
@@ -143,22 +147,22 @@ describe('buildEvents', () => {
         expires_at: '2026-09-08T10:00:00.000Z',
         source: { type: 'observed' }
       }
-    }
+    } satisfies Status
     const watch = buildEvents(resets, status).find(e =>
-      e.uid.startsWith('watch-')
-    )
+      e.uid?.startsWith('watch-')
+    )!
     expect(watch).not.toHaveProperty('url')
     expect(watch).not.toHaveProperty('description')
   })
 
   it('drops only the url of an event whose source URL is invalid', () => {
     const events = buildEvents(
-      [{ ...resets[0], source: { type: 'x_post', url: 'not a url' } }],
+      [{ ...resets[0]!, source: { type: 'x_post', url: 'not a url' } }],
       {}
     )
     expect(events).toHaveLength(1)
     expect(events[0]).not.toHaveProperty('url')
-    expect(events[0].description).toBe('not a url')
+    expect(events[0]!.description).toBe('not a url')
   })
 
   it('produces the same UIDs across two builds of identical input', () => {
