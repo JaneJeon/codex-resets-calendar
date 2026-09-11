@@ -136,10 +136,18 @@ from `env` in `src/`.
 
 ## Deploy
 
-```sh
-npx wrangler dev     # verify locally, curl and parse the feed before deploying
-npx wrangler deploy
-```
+Merging to master deploys; never deploy from a laptop.
+`.github/workflows/ci.yml` runs lint, tests, and
+`wrangler deploy --dry-run` on every push and PR. On a push to master,
+the `deploy` job runs `cloudflare/wrangler-action` with the
+`CLOUDFLARE_API_TOKEN` secret and the `CLOUDFLARE_ACCOUNT_ID` variable.
+It then waits for `https://cal.janejeon.com/codex-resets.ics` to return
+200 and runs only the `deployed feed` e2e block against it. The
+live-upstream block is left out, so an upstream rate limit can't fail a
+deploy that already happened.
+
+Before merging a `src/` change, verify it locally: `npm run dev`, then
+curl the feed and parse it.
 
 After any change to `src/`, update the Craft doc
 `Codex reset watch — current setup` with what actually changed and

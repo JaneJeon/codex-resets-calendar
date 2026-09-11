@@ -4,16 +4,18 @@ on:
   push:
     branches: [master]
   pull_request:
+    branches: [master]
 
 jobs:
   test:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: npm
 
       - run: npm ci
@@ -21,3 +23,50 @@ jobs:
       - run: npm run lint
 
       - run: npm test
+
+      - name: Check that the Worker bundles
+        run: npx wrangler deploy --dry-run
+
+  deploy:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: deploy
+      cancel-in-progress: false
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - run: npm ci
+
+      - uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy
+
+      # A new custom domain can be live before its certificate is ready.
+      - name: Wait for the feed to be served
+        run: |
+          for attempt in $(seq 1 30); do
+            if curl -X GET --fail --no-progress-meter --output /dev/null https://cal.janejeon.com/codex-resets.ics; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "The feed did not return 200 within 5 minutes" >&2
+          exit 1
+
+      # Only the deployed-feed block: a rate limit from the upstream API
+      # must not fail a deploy that already happened.
+      - name: Smoke-test the deployed feed
+        run: npx vitest run test/e2e -t 'deployed feed'
+        env:
+          RUN_E2E: '1'
+          DEPLOYED_URL: https://cal.janejeon.com/codex-resets.ics

@@ -44,8 +44,9 @@ npx swarp direnv allow      # let direnv autoload .env
 npm run dev     # local dev server
 npm test        # unit + integration tests
 npm run test:e2e  # hits the real upstream API; needs network
-npm run deploy   # wrangler deploy
 ```
+
+Deploys run from GitHub Actions when a change merges to master.
 
 See `AGENTS.md` for the full design rationale and the facts this feed
 was built on.
