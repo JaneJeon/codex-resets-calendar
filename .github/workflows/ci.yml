@@ -45,6 +45,13 @@ jobs:
 
       - run: npm ci
 
+      - name: Apply D1 migrations
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          command: d1 migrations apply CALENDAR_DB --remote
+
       - uses: cloudflare/wrangler-action@v4
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -55,7 +62,8 @@ jobs:
       - name: Wait for the feed to be served
         run: |
           for attempt in $(seq 1 30); do
-            if curl -X GET --fail --no-progress-meter --output /dev/null https://cal.janejeon.dev/codex-resets.ics; then
+            if curl -X GET --fail --no-progress-meter --output /dev/null https://cal.janejeon.dev/codex-resets.ics \
+              && curl -X GET --fail --no-progress-meter --output /dev/null https://cal.janejeon.dev/dtsm-events.ics; then
               exit 0
             fi
             sleep 10
