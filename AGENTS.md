@@ -73,10 +73,23 @@ place. `buildEvents` in `src/events.js` dedupes by UID and drops a
 | `/resets` returns 429                      | 502, `Retry-After` logged, no retry                                  |
 | `/status` fails in any way                 | serve the history-only feed, `console.warn`                          |
 
+## Local setup and secrets
+
+`.env.template` holds 1Password references for `CLOUDFLARE_API_TOKEN`
+and `CLOUDFLARE_ACCOUNT_ID`. `npx swarp secrets refresh` resolves it
+into `.env`, and `.envrc` autoloads that through direnv
+(`npx swarp direnv allow` once per checkout). Wrangler authenticates
+from those two variables, so there is no `wrangler login`. Run
+commands that need them under `direnv exec . <command>`.
+
+Gotcha: wrangler also reads `.env` by itself, and in local development
+it loads those values into the Worker's `env`. The API token is
+therefore visible to Worker code under `wrangler dev`. Never read it
+from `env` in `src/`.
+
 ## Deploy
 
 ```sh
-npx wrangler login   # once per machine
 npx wrangler dev     # verify locally, curl and parse the feed before deploying
 npx wrangler deploy
 ```
