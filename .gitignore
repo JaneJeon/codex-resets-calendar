@@ -145,3 +145,5 @@ vite.config.ts.timestamp-*
 
 # Wrangler local dev
 .wrangler/
+
+.claude/worktrees/
