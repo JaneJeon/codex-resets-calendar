@@ -110,7 +110,7 @@ describe('buildEvents', () => {
       active_watch: null
     }
     const events = buildEvents(resets, status)
-    const matching = events.filter(e => e.uid === 'r1@cal.janejeon.com')
+    const matching = events.filter(e => e.uid === 'r1@cal.janejeon.dev')
     expect(matching).toHaveLength(1)
     expect(matching[0].title).toBe('Codex Reset')
   })

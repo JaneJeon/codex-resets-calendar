@@ -1,14 +1,14 @@
 # calendars
 
 A stateless Cloudflare Worker that serves iCalendar feeds at
-`cal.janejeon.com/<path>`. Subscribe to one from any calendar client that
+`cal.janejeon.dev/<path>`. Subscribe to one from any calendar client that
 supports ICS subscriptions (Fastmail, Google Calendar, Apple Calendar).
 Today it serves one calendar: Codex weekly usage-limit resets.
 
 Feed URL:
 
 ```
-https://cal.janejeon.com/codex-resets.ics
+https://cal.janejeon.dev/codex-resets.ics
 ```
 
 ## What it does

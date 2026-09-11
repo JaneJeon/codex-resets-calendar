@@ -39,7 +39,10 @@ describe.skipIf(!runE2E)('live upstream', () => {
 
 describe.skipIf(!runE2E || !deployedUrl)('deployed feed', () => {
   it('serves a valid feed from the deployed URL', async () => {
-    const response = await fetch(deployedUrl)
+    // The zone blocks requests without a User-Agent (AGENTS.md, Domain).
+    const response = await fetch(deployedUrl, {
+      headers: { 'User-Agent': 'calendars-smoke-test' }
+    })
     expect(response.status).toBe(200)
     expect(response.headers.get('Content-Type')).toBe(
       'text/calendar; charset=utf-8'
