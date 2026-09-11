@@ -17,11 +17,17 @@ each produces a feed that looks fine and is wrong:
 
 1. Slicing a UTC timestamp to get a calendar date. 44% of the historical
    resets fall on a different day in `America/Los_Angeles` than in UTC.
-   Always convert to the LA date first (`laDateString` in `src/events.js`).
+   Always convert to the LA date first (`laDate` in `src/events.js`).
 2. All-day `DTEND` is exclusive. One day is `DTSTART;VALUE=DATE:20260907`
    with `DTEND;VALUE=DATE:20260908`.
-3. ICS line endings must be CRLF, folding at 75 octets (not characters),
-   never splitting a multi-byte UTF-8 sequence.
+3. Hand-assembling ICS text. Serialization belongs to the `ics` library
+   (`src/ics.js`), and it validates strictly: an unknown attribute or an
+   invalid `url` fails the whole calendar. So event builders pass only
+   `ics` attributes and drop a bad URL from its one event. SUMMARY text
+   goes in `title` (a missing title becomes "Untitled event"), and
+   `timestamp` must be milliseconds (an ISO string is written verbatim
+   as an invalid DTSTAMP). The library folds lines by character, not by
+   75 octets; today's feed text is ASCII, so lines stay within 75 octets.
 4. Inventing a time: no midpoint between two bounds, no recentering, no
    start time derived from an upper bound. The one bounded exception is
    the 30-minute symmetric tolerance around `scheduled_for` (see below),
@@ -103,8 +109,9 @@ what was verified, per that folder's README.
 
 ## Testing
 
-- Unit tests (`test/unit/`) cover the pure logic: escaping, folding,
-  LA-date conversion, all-day arithmetic, UID stability.
+- Unit tests (`test/unit/`) cover the pure logic: LA-date conversion,
+  all-day arithmetic, UID stability, and the serialized output parsed
+  back with `ical.js`.
 - Integration tests (`test/integration/`) exercise
   `exports.default.fetch()` from `cloudflare:workers` against a stubbed
   `globalThis.fetch`, covering routing and the failure table above.

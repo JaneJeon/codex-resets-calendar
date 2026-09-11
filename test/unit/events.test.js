@@ -1,31 +1,31 @@
 import { describe, expect, it } from 'vitest'
-import {
-  addDaysToDateString,
-  buildEvents,
-  laDateString
-} from '../../src/events.js'
+import { addDays, buildEvents, laDate } from '../../src/events.js'
 
-describe('laDateString', () => {
+describe('laDate', () => {
   it('converts a PDT instant to its Los Angeles calendar date', () => {
-    expect(laDateString('2026-09-08T01:56:57.501Z')).toBe('20260907')
+    expect(laDate('2026-09-08T01:56:57.501Z')).toEqual([2026, 9, 7])
   })
 
   it('converts a PST instant to its Los Angeles calendar date', () => {
-    expect(laDateString('2026-01-15T03:00:00.000Z')).toBe('20260114')
+    expect(laDate('2026-01-15T03:00:00.000Z')).toEqual([2026, 1, 14])
   })
 
   it('regression: the exact reported instant lands on 2026-09-07 in Los Angeles', () => {
-    expect(laDateString('2026-09-08T01:56:57.501Z')).toBe('20260907')
+    expect(laDate('2026-09-08T01:56:57.501Z')).toEqual([2026, 9, 7])
   })
 })
 
-describe('addDaysToDateString', () => {
+describe('addDays', () => {
   it('adds one day across a month boundary', () => {
-    expect(addDaysToDateString('20260930', 1)).toBe('20261001')
+    expect(addDays([2026, 9, 30], 1)).toEqual([2026, 10, 1])
+  })
+
+  it('adds one day across a year boundary', () => {
+    expect(addDays([2026, 12, 31], 1)).toEqual([2027, 1, 1])
   })
 
   it('adds two days', () => {
-    expect(addDaysToDateString('20260907', 2)).toBe('20260909')
+    expect(addDays([2026, 9, 7], 2)).toEqual([2026, 9, 9])
   })
 })
 
@@ -52,9 +52,16 @@ describe('buildEvents', () => {
     const regular = events.find(e => e.uid.startsWith('r1@'))
     const banked = events.find(e => e.uid.startsWith('r2@'))
     expect(regular.categories).toEqual(['regular'])
-    expect(regular.summary).toBe('Codex Reset')
+    expect(regular.title).toBe('Codex Reset')
     expect(banked.categories).toEqual(['banked'])
-    expect(banked.summary).toBe('Codex Reset (banked)')
+    expect(banked.title).toBe('Codex Reset (banked)')
+  })
+
+  it('stamps an event from its source timestamp in milliseconds', () => {
+    const events = buildEvents(resets, {})
+    const regular = events.find(e => e.uid.startsWith('r1@'))
+    expect(regular.timestamp).toBe(Date.parse('2026-09-01T18:00:00.000Z'))
+    expect(regular.lastModified).toBe(regular.timestamp)
   })
 
   it('produces a 60-minute block centered on scheduled_for, 30 minutes each side', () => {
@@ -76,9 +83,9 @@ describe('buildEvents', () => {
     }
     const events = buildEvents(resets, status)
     const scheduled = events.find(e => e.uid.startsWith('s1@'))
-    expect(scheduled.allDay).toBe(false)
-    expect(scheduled.start.toISOString()).toBe('2026-09-10T18:30:00.000Z')
-    expect(scheduled.end.toISOString()).toBe('2026-09-10T19:30:00.000Z')
+    expect(scheduled.start).toBe(Date.parse('2026-09-10T18:30:00.000Z'))
+    expect(scheduled.end).toBe(Date.parse('2026-09-10T19:30:00.000Z'))
+    expect(scheduled.startOutputType).toBe('utc')
   })
 
   it('dedupes a scheduled reset that already appears in history, keeping the history version', () => {
@@ -103,7 +110,7 @@ describe('buildEvents', () => {
       e => e.uid === 'r1@codex-resets-calendar.janejeon.workers.dev'
     )
     expect(matching).toHaveLength(1)
-    expect(matching[0].summary).toBe('Codex Reset')
+    expect(matching[0].title).toBe('Codex Reset')
   })
 
   it('renders a watch spanning two Los Angeles days with DTEND two days after DTSTART', () => {
@@ -121,9 +128,35 @@ describe('buildEvents', () => {
     }
     const events = buildEvents(resets, status)
     const watch = events.find(e => e.uid.startsWith('watch-'))
-    expect(watch.startDate).toBe('20260907')
-    expect(watch.endDate).toBe('20260909')
-    expect(watch.summary).toBe('Codex Reset forecast (elevated, 62%)')
+    expect(watch.start).toEqual([2026, 9, 7])
+    expect(watch.end).toEqual([2026, 9, 9])
+    expect(watch.title).toBe('Codex Reset forecast (elevated, 62%)')
+  })
+
+  it('omits DESCRIPTION and URL when the source has no URL', () => {
+    const status = {
+      active_watch: {
+        level: 'elevated',
+        observed_at: '2026-09-07T23:00:00.000Z',
+        expires_at: '2026-09-08T10:00:00.000Z',
+        source: { type: 'observed' }
+      }
+    }
+    const watch = buildEvents(resets, status).find(e =>
+      e.uid.startsWith('watch-')
+    )
+    expect(watch).not.toHaveProperty('url')
+    expect(watch).not.toHaveProperty('description')
+  })
+
+  it('drops only the url of an event whose source URL is invalid', () => {
+    const events = buildEvents(
+      [{ ...resets[0], source: { type: 'x_post', url: 'not a url' } }],
+      {}
+    )
+    expect(events).toHaveLength(1)
+    expect(events[0]).not.toHaveProperty('url')
+    expect(events[0].description).toBe('not a url')
   })
 
   it('produces the same UIDs across two builds of identical input', () => {

@@ -36,7 +36,7 @@ export default {
     }
 
     const events = buildEvents(resets, status)
-    const body = serializeCalendar(events)
+    const body = serializeCalendar(events, { name: 'Codex Resets' })
 
     return new Response(body, {
       headers: {

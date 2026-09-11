@@ -1,7 +1,9 @@
+import { isValidURL } from 'ics'
+
 const DOMAIN = 'codex-resets-calendar.janejeon.workers.dev'
 const SCHEDULED_TOLERANCE_MS = 30 * 60 * 1000
 
-export function laDateString(isoString) {
+export function laDate(isoString) {
   const parts = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'America/Los_Angeles',
     year: 'numeric',
@@ -9,34 +11,42 @@ export function laDateString(isoString) {
     day: '2-digit'
   }).formatToParts(new Date(isoString))
   const byType = Object.fromEntries(parts.map(part => [part.type, part.value]))
-  return `${byType.year}${byType.month}${byType.day}`
+  return [Number(byType.year), Number(byType.month), Number(byType.day)]
 }
 
-export function addDaysToDateString(dateString, days) {
-  const year = Number(dateString.slice(0, 4))
-  const month = Number(dateString.slice(4, 6))
-  const day = Number(dateString.slice(6, 8))
-  const date = new Date(Date.UTC(year, month - 1, day))
-  date.setUTCDate(date.getUTCDate() + days)
-  const y = date.getUTCFullYear()
-  const m = String(date.getUTCMonth() + 1).padStart(2, '0')
-  const d = String(date.getUTCDate()).padStart(2, '0')
-  return `${y}${m}${d}`
+export function addDays([year, month, day], days) {
+  const date = new Date(Date.UTC(year, month - 1, day + days))
+  return [date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate()]
+}
+
+// DTSTAMP and LAST-MODIFIED come from the source's own timestamp, never the
+// wall clock, so identical input serializes identically. ics writes an ISO
+// string verbatim, so it must be milliseconds.
+function stampFields(isoString) {
+  const stamp = Date.parse(isoString)
+  return { timestamp: stamp, lastModified: stamp }
+}
+
+// ics rejects the whole calendar on an invalid URL, so a bad source URL is
+// dropped from its one event instead.
+function sourceFields(source) {
+  const url = source?.url
+  if (typeof url !== 'string') return {}
+  return isValidURL(url) ? { description: url, url } : { description: url }
 }
 
 function pastResetEvent(reset) {
-  const startDate = laDateString(reset.announced_at)
+  const start = laDate(reset.announced_at)
   const isBanked = reset.reset_type === 'banked'
   return {
     uid: `${reset.id}@${DOMAIN}`,
-    summary: isBanked ? 'Codex Reset (banked)' : 'Codex Reset',
+    title: isBanked ? 'Codex Reset (banked)' : 'Codex Reset',
     categories: [reset.reset_type],
-    description: reset.source?.url,
-    url: reset.source?.url,
-    allDay: true,
-    startDate,
-    endDate: addDaysToDateString(startDate, 1),
-    dtstamp: reset.announced_at
+    ...sourceFields(reset.source),
+    start,
+    end: addDays(start, 1),
+    ...stampFields(reset.announced_at),
+    transp: 'TRANSPARENT'
   }
 }
 
@@ -44,47 +54,44 @@ function scheduledResetEvent(scheduled) {
   const isBanked = scheduled.reset_type === 'banked'
   const base = {
     uid: `${scheduled.id}@${DOMAIN}`,
-    summary: `Codex Reset announced${isBanked ? ' (banked)' : ''}`,
+    title: `Codex Reset announced${isBanked ? ' (banked)' : ''}`,
     categories: ['scheduled'],
-    description: scheduled.source?.url,
-    url: scheduled.source?.url,
-    dtstamp: scheduled.announced_at
+    ...sourceFields(scheduled.source),
+    ...stampFields(scheduled.announced_at),
+    transp: 'TRANSPARENT'
   }
 
   if (scheduled.scheduled_for) {
-    const center = new Date(scheduled.scheduled_for)
+    const center = Date.parse(scheduled.scheduled_for)
     return {
       ...base,
-      allDay: false,
-      start: new Date(center.getTime() - SCHEDULED_TOLERANCE_MS),
-      end: new Date(center.getTime() + SCHEDULED_TOLERANCE_MS)
+      start: center - SCHEDULED_TOLERANCE_MS,
+      startInputType: 'utc',
+      startOutputType: 'utc',
+      end: center + SCHEDULED_TOLERANCE_MS
     }
   }
 
-  const startDate = laDateString(scheduled.announced_at)
+  const start = laDate(scheduled.announced_at)
   return {
     ...base,
-    allDay: true,
-    startDate,
-    endDate: addDaysToDateString(startDate, 1)
+    start,
+    end: addDays(start, 1)
   }
 }
 
 function watchEvent(watch) {
-  const startDate = laDateString(watch.observed_at)
-  const expiresDate = laDateString(watch.expires_at)
   const percent =
     watch.reset_chance_percent != null ? `, ${watch.reset_chance_percent}%` : ''
   return {
     uid: `watch-${watch.observed_at}@${DOMAIN}`,
-    summary: `Codex Reset forecast (${watch.level}${percent})`,
+    title: `Codex Reset forecast (${watch.level}${percent})`,
     categories: ['forecast'],
-    description: watch.source?.url,
-    url: watch.source?.url,
-    allDay: true,
-    startDate,
-    endDate: addDaysToDateString(expiresDate, 1),
-    dtstamp: watch.observed_at
+    ...sourceFields(watch.source),
+    start: laDate(watch.observed_at),
+    end: addDays(laDate(watch.expires_at), 1),
+    ...stampFields(watch.observed_at),
+    transp: 'TRANSPARENT'
   }
 }
 
