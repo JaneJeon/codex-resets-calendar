@@ -6,20 +6,22 @@ full design rationale and history live on Linear issue JANE-240.
 ## What this is
 
 One stateless Cloudflare Worker serving several iCalendar feeds, one per
-path, each derived on every request from its upstream source. No
-database, no cron, and no secret inside the Worker (the Cloudflare
-credentials in `.env` are for wrangler only). Today there is one
-calendar: Codex resets at `/codex-resets.ics`, built from two upstream
-GETs against `https://codex-resets.com`. No Telegram or Slack code —
-those are out of scope by design.
+path. Feeds are derived from their upstream source and the serialized
+response is retained in Workers KV for outage fallback. No database, no
+cron, and no secret inside the Worker (the Cloudflare credentials in
+`.env` are for wrangler only). Today there is one calendar: Codex resets
+at `/codex-resets.ics`, built from two upstream GETs against
+`https://codex-resets.com`. No Telegram or Slack code — those are out of
+scope by design.
 
 ## Calendars
 
 Each calendar lives in `src/calendars/<name>/` and default-exports
-`{ path, name, cacheTtlSeconds, buildEvents() }`. `buildEvents` resolves
-to `ics` event attributes and throws `UpstreamError` (`src/errors.js`)
-when its source fails. `src/calendars/index.js` is the registry.
-`src/index.js` routes an exact path match to its calendar; every other
+`{ path, name, cacheTtlSeconds, buildEvents(), buildResponse?() }`.
+`buildEvents` resolves to `ics` event attributes and throws
+`UpstreamError` (`src/errors.ts`) when its source fails.
+`src/calendars/index.ts` is the registry.
+`src/index.ts` routes an exact path match to its calendar; every other
 path, including `/`, is a 404.
 
 To add a calendar: create its folder, export that object, add it to the
@@ -29,8 +31,22 @@ registry, and add tests under `test/unit/calendars/<name>/` and
 
 `cacheTtlSeconds` becomes `Cache-Control: public, max-age=<ttl>` on a
 successful response. Error responses always carry
-`Cache-Control: no-store`: an `UpstreamError` is a 502, and anything
-else (for example `ics` rejecting an event) is a logged 500.
+`Cache-Control: no-store`: an `UpstreamError` is a 502 when no retained
+response is available, and anything else (for example `ics` rejecting
+an event) is a logged 500.
+
+Reusable response-cache mechanics live in `src/lib/response-cache.ts` and
+ICS serialization lives in `src/lib/ics.ts`; a calendar opts into those
+behaviors through its own `buildResponse` implementation.
+
+Codex resets also uses the `CALENDAR_CACHE` Workers KV binding. A
+successful serialized response is written under the calendar's stable
+key with a `cachedAt` timestamp. It is served directly while fresher
+than one hour; after that the Worker refreshes upstream synchronously.
+If refresh fails with an `UpstreamError`, the last successful response
+is served indefinitely. KV read and write failures are logged and do not
+replace a valid live response. Cached and fallback responses retain the
+normal 15-minute `Cache-Control` header.
 
 That header is what actually caches the feed. `wrangler.jsonc` enables
 Workers Cache (`"cache": { "enabled": true }`), so Cloudflare serves a
@@ -58,7 +74,7 @@ each produces a feed that looks fine and is wrong:
 2. All-day `DTEND` is exclusive. One day is `DTSTART;VALUE=DATE:20260907`
    with `DTEND;VALUE=DATE:20260908`.
 3. Hand-assembling ICS text. Serialization belongs to the `ics` library
-   (`src/ics.js`), and it validates strictly: an unknown attribute or an
+   (`src/lib/ics.ts`), and it validates strictly: an unknown attribute or an
    invalid `url` fails the whole calendar. So event builders pass only
    `ics` attributes and drop a bad URL from its one event. SUMMARY text
    goes in `title` (a missing title becomes "Untitled event"), and
@@ -113,13 +129,13 @@ by UID and drops a
 
 ## Failure policy
 
-| Condition                                  | Response                                                                         |
-| ------------------------------------------ | -------------------------------------------------------------------------------- |
-| `/resets` fails, times out, or returns 5xx | 502, `no-store`                                                                  |
-| `/resets` returns 200 with an empty array  | 502, `no-store` (an empty calendar would tell subscribers to delete every event) |
-| `/resets` returns 429                      | 502, `no-store`, `Retry-After` logged, no retry                                  |
-| `/status` fails in any way                 | serve the history-only feed, `console.warn`                                      |
-| `ics` rejects an event                     | 500, `no-store`, `console.error`                                                 |
+| Condition                                  | Response                                                                                                                                      |
+| ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/resets` fails, times out, or returns 5xx | 502, `no-store`, unless a retained response exists; then serve that response                                                                  |
+| `/resets` returns 200 with an empty array  | 502, `no-store`, unless a retained response exists; then serve that response (an empty calendar would tell subscribers to delete every event) |
+| `/resets` returns 429                      | 502, `no-store`, `Retry-After` logged, no retry, unless a retained response exists; then serve that response                                  |
+| `/status` fails in any way                 | serve the history-only feed, `console.warn`                                                                                                   |
+| `ics` rejects an event                     | 500, `no-store`, `console.error`                                                                                                              |
 
 ## Domain
 

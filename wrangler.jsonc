@@ -8,6 +8,12 @@
   // the DNS record and certificate on deploy.
   "workers_dev": false,
   "routes": [{ "pattern": "cal.janejeon.dev", "custom_domain": true }],
+  "kv_namespaces": [
+    {
+      "binding": "CALENDAR_CACHE",
+      "id": "b6d2d4946f7e47a4b74559d167e92f3f"
+    }
+  ],
   // Workers Cache: serve cached responses without running the Worker, per
   // each response's Cache-Control. See AGENTS.md, Calendars.
   "cache": {

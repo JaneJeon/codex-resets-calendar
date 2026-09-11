@@ -1,4 +1,4 @@
-import { exports } from 'cloudflare:workers'
+import { env, exports } from 'cloudflare:workers'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import resetsFixture from '../fixtures/resets.json'
 import statusEmptyFixture from '../fixtures/status-empty.json'
@@ -17,8 +17,9 @@ function mockFetch(handler: typeof fetch): void {
   vi.stubGlobal('fetch', vi.fn(handler))
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.restoreAllMocks()
+  await env.CALENDAR_CACHE.delete('codex-resets.ics')
 })
 
 afterEach(() => {
@@ -38,6 +39,172 @@ describe('routing', () => {
 })
 
 describe('the feed', () => {
+  async function seedCachedFeed(ageSeconds = 2 * 60 * 60): Promise<string> {
+    const body =
+      'BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nSUMMARY:Cached feed\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n'
+    await env.CALENDAR_CACHE.put('codex-resets.ics', body, {
+      metadata: { cachedAt: Date.now() - ageSeconds * 1000 }
+    })
+    return body
+  }
+
+  it('writes a successful response to KV and serves a fresh hit without upstream requests', async () => {
+    mockFetch(async input => {
+      const url = String(input)
+      if (url.includes('/api/v1/resets')) return jsonResponse(resetsFixture)
+      if (url.includes('/api/v1/status'))
+        return jsonResponse(statusEmptyFixture)
+      throw new Error(`unexpected fetch: ${url}`)
+    })
+
+    const first = await exports.default.fetch(
+      'http://example.com/codex-resets.ics'
+    )
+    const firstBody = await first.text()
+    const cached = await env.CALENDAR_CACHE.getWithMetadata('codex-resets.ics')
+    expect(cached.value).toBe(firstBody)
+    expect(cached.metadata).toEqual({ cachedAt: expect.any(Number) })
+
+    const fetchMock = vi.mocked(fetch)
+    fetchMock.mockClear()
+    fetchMock.mockImplementation(async () => {
+      throw new Error('upstream should not be called for a fresh cache hit')
+    })
+    const second = await exports.default.fetch(
+      'http://example.com/codex-resets.ics'
+    )
+    expect(second.status).toBe(200)
+    expect(await second.text()).toBe(firstBody)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('refreshes a stale response and replaces the cached body and timestamp', async () => {
+    const oldBody = await seedCachedFeed()
+    mockFetch(async input => {
+      const url = String(input)
+      if (url.includes('/api/v1/resets')) return jsonResponse(resetsFixture)
+      if (url.includes('/api/v1/status'))
+        return jsonResponse(statusEmptyFixture)
+      throw new Error(`unexpected fetch: ${url}`)
+    })
+
+    const response = await exports.default.fetch(
+      'http://example.com/codex-resets.ics'
+    )
+    const body = await response.text()
+    const cached = await env.CALENDAR_CACHE.getWithMetadata('codex-resets.ics')
+    expect(body).not.toBe(oldBody)
+    expect(cached.value).toBe(body)
+    expect(cached.metadata).toEqual({ cachedAt: expect.any(Number) })
+  })
+
+  it.each([
+    ['network failure', 'network'] as const,
+    ['5xx response', '5xx'] as const,
+    ['empty history', 'empty'] as const,
+    ['rate limit', '429'] as const
+  ])(
+    'serves a stale response when refreshing upstream has a %s',
+    async (_label, failure) => {
+      const cachedBody = await seedCachedFeed()
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      vi.spyOn(console, 'error').mockImplementation(() => {})
+      mockFetch(async input => {
+        const url = String(input)
+        if (url.includes('/api/v1/resets')) {
+          if (failure === 'network') throw new TypeError('network down')
+          if (failure === 'empty') return jsonResponse({ data: [] })
+          return new Response(failure === '429' ? 'slow down' : 'boom', {
+            status: failure === '429' ? 429 : 503,
+            headers: failure === '429' ? { 'Retry-After': '30' } : undefined
+          })
+        }
+        throw new Error(`unexpected fetch: ${url}`)
+      })
+
+      const response = await exports.default.fetch(
+        'http://example.com/codex-resets.ics'
+      )
+      expect(response.status).toBe(200)
+      expect(await response.text()).toBe(cachedBody)
+      expect(response.headers.get('Cache-Control')).toBe('public, max-age=900')
+      expect(warnSpy).toHaveBeenCalledWith(
+        'Codex Resets refresh failed, serving cached response',
+        expect.any(Error)
+      )
+    }
+  )
+
+  it('does not use stale data when serialization fails', async () => {
+    await seedCachedFeed()
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const unserializable = {
+      ...resetsFixture,
+      data: [{ ...resetsFixture.data[0], reset_type: 42 }]
+    }
+    mockFetch(async input => {
+      const url = String(input)
+      if (url.includes('/api/v1/resets')) return jsonResponse(unserializable)
+      if (url.includes('/api/v1/status'))
+        return jsonResponse(statusEmptyFixture)
+      throw new Error(`unexpected fetch: ${url}`)
+    })
+
+    const response = await exports.default.fetch(
+      'http://example.com/codex-resets.ics'
+    )
+    expect(response.status).toBe(500)
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+    expect(errorSpy).toHaveBeenCalledWith(
+      'Codex Resets feed failed',
+      expect.anything()
+    )
+  })
+
+  it('returns a fresh response when KV write fails', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.spyOn(env.CALENDAR_CACHE, 'put').mockRejectedValue(new Error('KV down'))
+    mockFetch(async input => {
+      const url = String(input)
+      if (url.includes('/api/v1/resets')) return jsonResponse(resetsFixture)
+      if (url.includes('/api/v1/status'))
+        return jsonResponse(statusEmptyFixture)
+      throw new Error(`unexpected fetch: ${url}`)
+    })
+
+    const response = await exports.default.fetch(
+      'http://example.com/codex-resets.ics'
+    )
+    expect(response.status).toBe(200)
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Codex Resets response cache write failed',
+      expect.any(Error)
+    )
+  })
+
+  it('refreshes upstream when KV read fails', async () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.spyOn(env.CALENDAR_CACHE, 'getWithMetadata').mockRejectedValue(
+      new Error('KV down')
+    )
+    mockFetch(async input => {
+      const url = String(input)
+      if (url.includes('/api/v1/resets')) return jsonResponse(resetsFixture)
+      if (url.includes('/api/v1/status'))
+        return jsonResponse(statusEmptyFixture)
+      throw new Error(`unexpected fetch: ${url}`)
+    })
+
+    const response = await exports.default.fetch(
+      'http://example.com/codex-resets.ics'
+    )
+    expect(response.status).toBe(200)
+    expect(warnSpy).toHaveBeenCalledWith(
+      'Codex Resets response cache read failed',
+      expect.any(Error)
+    )
+  })
+
   it('happy path: serves regular and banked events with a valid calendar', async () => {
     mockFetch(async input => {
       const url = String(input)

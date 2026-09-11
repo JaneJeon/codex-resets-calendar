@@ -1,7 +1,7 @@
 import ICAL from 'ical.js'
 import { describe, expect, it } from 'vitest'
-import type { CalendarEvent } from '../../src/ics.js'
-import { serializeCalendar } from '../../src/ics.js'
+import type { CalendarEvent } from '../../src/lib/ics.js'
+import { serializeCalendar } from '../../src/lib/ics.js'
 
 const stamp = Date.parse('2026-09-07T18:00:00.000Z')
 
