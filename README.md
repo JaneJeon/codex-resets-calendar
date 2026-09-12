@@ -51,6 +51,9 @@ from DSMA at most once per day. The default KV fallback is retained
 indefinitely. Inactive custom-filter variants expire from KV after 30 days;
 regularly polled subscriptions renew their variant during hourly rebuilds.
 
+See the [DTSM request-flow guide](backend/src/calendars/dtsm-events/README.md)
+for the URL-to-cache-to-D1 walk, filter semantics, and effective SQL.
+
 Active, time-sensitive delivery (forecasts with deadlines, reset
 confirmations) is handled by the tracker's own Telegram channel,
 [`t.me/codex_resets`](https://t.me/codex_resets). This feed is the
