@@ -149,7 +149,9 @@ describe('the Downtown San Mateo feed', () => {
     )
     expect(response.status).toBe(400)
     expect(response.headers.get('Cache-Control')).toBe('no-store')
-    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*')
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe(
+      'https://cal.janejeon.com'
+    )
     expect(await response.text()).toContain('unknown parameter venue')
     expect(fetchMock).not.toHaveBeenCalled()
   })
@@ -278,7 +280,9 @@ describe('routing', () => {
   it('returns 404 at / because there is no single feed to redirect to', async () => {
     const response = await exports.default.fetch('http://example.com/')
     expect(response.status).toBe(404)
-    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*')
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe(
+      'https://cal.janejeon.com'
+    )
   })
 
   it('returns 404 for an unknown path', async () => {
@@ -470,7 +474,9 @@ describe('the feed', () => {
     expect(response.headers.get('Content-Type')).toBe(
       'text/calendar; charset=utf-8'
     )
-    expect(response.headers.get('Access-Control-Allow-Origin')).toBe('*')
+    expect(response.headers.get('Access-Control-Allow-Origin')).toBe(
+      'https://cal.janejeon.com'
+    )
     expect(response.headers.get('Cache-Control')).toBe('public, max-age=900')
 
     const body = await response.text()
