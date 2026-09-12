@@ -1,3 +1,7 @@
 backend/worker-configuration.d.ts
 **/coverage/
 **/dist/
+
+/.nx/cache
+/.nx/workspace-data
+.nx/self-healing
