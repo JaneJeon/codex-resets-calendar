@@ -1,0 +1,42 @@
+{
+  "$schema": "./node_modules/nx/schemas/nx-schema.json",
+  "implicitDependencies": {
+    "package.json": "*",
+    "package-lock.json": "*",
+    "nx.json": "*",
+    "tsconfig.base.json": "*",
+    ".prettierrc.yml": "*",
+    ".prettierignore": "*"
+  },
+  "targetDefaults": {
+    "lint": {
+      "cache": true
+    },
+    "test": {
+      "cache": true,
+      "inputs": ["default", "^default"]
+    },
+    "test:coverage": {
+      "cache": false
+    },
+    "build": {
+      "cache": true,
+      "dependsOn": ["^build"]
+    },
+    "format": {
+      "cache": false
+    },
+    "dev": {
+      "cache": false
+    },
+    "deploy": {
+      "cache": false,
+      "dependsOn": ["build"]
+    },
+    "deploy:dry-run": {
+      "cache": false,
+      "dependsOn": ["build"]
+    }
+  },
+  "analytics": false
+}

@@ -1,0 +1,34 @@
+{
+  "$schema": "../node_modules/wrangler/config-schema.json",
+  "name": "calendars",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-09-08",
+  // Feeds are served only from cal.janejeon.dev/<path> (AGENTS.md, Domain
+  // explains why not janejeon.com). The custom domain makes Cloudflare create
+  // the DNS record and certificate on deploy.
+  "workers_dev": false,
+  "routes": [{ "pattern": "cal.janejeon.dev", "custom_domain": true }],
+  "kv_namespaces": [
+    {
+      "binding": "CALENDAR_CACHE",
+      "id": "b6d2d4946f7e47a4b74559d167e92f3f"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "CALENDAR_DB",
+      "database_name": "calendars",
+      "database_id": "46a7cda1-e481-4e17-92a0-3fc1e5f65467",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // Workers Cache: serve cached responses without running the Worker, per
+  // each response's Cache-Control. See AGENTS.md, Calendars.
+  "cache": {
+    "enabled": true
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  }
+}

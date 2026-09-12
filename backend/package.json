@@ -1,0 +1,39 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply CALENDAR_DB --local",
+    "db:migrate:remote": "drizzle-kit migrate",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:e2e": "RUN_E2E=1 vitest run test/e2e",
+    "lint": "run-s lint:*",
+    "lint:drizzle": "drizzle-kit check",
+    "lint:prettier": "prettier --check . --ignore-path ../.prettierignore",
+    "lint:typescript": "tsc --noEmit",
+    "format": "prettier --write . --ignore-path ../.prettierignore",
+    "build": "wrangler deploy --dry-run",
+    "deploy": "npm run db:migrate:remote && wrangler deploy",
+    "types": "CLOUDFLARE_LOAD_DEV_VARS_FROM_DOT_ENV=false wrangler types",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.1.7",
+    "drizzle-kit": "^0.31.10",
+    "ical.js": "^2.1.0",
+    "wrangler": "^4.131.0"
+  },
+  "dependencies": {
+    "date-fns": "^4.4.0",
+    "date-fns-tz": "^3.2.0",
+    "drizzle-orm": "^0.45.2",
+    "entities": "^8.1.0",
+    "html-to-text": "^10.0.1",
+    "ics": "^3.12.0",
+    "@janejeon/calendars-shared": "*"
+  }
+}
