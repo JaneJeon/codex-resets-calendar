@@ -5,10 +5,8 @@ import { withResponseCache } from '@/lib/response-cache.js'
 
 const NO_STORE = { 'Cache-Control': 'no-store' }
 const CONTENT_TYPE = 'text/calendar; charset=utf-8'
-const CORS_ORIGIN = 'https://cal.janejeon.com'
-
-function withCors(response: Response): Response {
-  response.headers.set('Access-Control-Allow-Origin', CORS_ORIGIN)
+function withCors(response: Response, frontendOrigin: string): Response {
+  response.headers.set('Access-Control-Allow-Origin', frontendOrigin)
   return response
 }
 
@@ -54,7 +52,7 @@ export async function buildCalendarBody(
 
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
-    return withCors(await handleRequest(request, env))
+    return withCors(await handleRequest(request, env), env.FRONTEND_ORIGIN)
   }
 }
 
