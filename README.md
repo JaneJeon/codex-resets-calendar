@@ -30,11 +30,29 @@ outage fallback.
 The Downtown San Mateo feed takes one open-ended, paginated daily snapshot of
 all events exposed by the DSMA API and stores explicit useful fields in
 normalized D1 tables. The default feed selects the configured B Street and
-Central Park venue IDs at read time; images are discarded. That separation
-allows later venue, category, or organizer filters without re-scraping or a
-schema change. Ended events are retained and never fetched again. Upstream
-date-time strings are interpreted as `America/Los_Angeles` wall time, even
-when the API's timezone metadata disagrees.
+Central Park venue IDs at read time; images are discarded. Filtered URLs query
+the same catalog without re-scraping. Ended events are retained and never
+fetched again. Upstream date-time strings are interpreted as
+`America/Los_Angeles` wall time, even when the API's timezone metadata
+disagrees.
+
+The DTSM feed accepts comma-separated venue, organizer, and category IDs:
+
+```
+https://cal.janejeon.dev/dtsm-events.ics?venues=1201,1137
+https://cal.janejeon.dev/dtsm-events.ics?organizers=700&categories=80,81
+```
+
+Within one parameter, an event can match any listed ID. Supplying multiple
+parameters requires a match in each group. Omitted groups are unrestricted.
+With no query parameters, the feed keeps its six configured default venues.
+Each DTSM response is cached for one hour, while the shared D1 catalog refreshes
+from DSMA at most once per day. The default KV fallback is retained
+indefinitely. Inactive custom-filter variants expire from KV after 30 days;
+regularly polled subscriptions renew their variant during hourly rebuilds.
+
+See the [DTSM request-flow guide](backend/src/calendars/dtsm-events/README.md)
+for the URL-to-cache-to-D1 walk, filter semantics, and effective SQL.
 
 Active, time-sensitive delivery (forecasts with deadlines, reset
 confirmations) is handled by the tracker's own Telegram channel,

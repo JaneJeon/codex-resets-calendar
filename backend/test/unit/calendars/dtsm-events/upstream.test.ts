@@ -1,9 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { UpstreamError } from '@/errors.js'
-import {
-  DOWNTOWN_VENUE_IDS,
-  fetchEvents
-} from '@/calendars/dtsm-events/upstream.js'
+import { fetchEvents } from '@/calendars/dtsm-events/upstream.js'
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -33,7 +30,7 @@ describe('fetchEvents', () => {
     expect(firstUrl.searchParams.get('end_date')).toBeNull()
   })
 
-  it('supports a source-side venue filter without making it the default', async () => {
+  it('supports a bounded source snapshot', async () => {
     const fetchMock = vi.fn(async (_input: URL | RequestInfo) =>
       response([], 1)
     )
@@ -41,14 +38,13 @@ describe('fetchEvents', () => {
     await fetchEvents(
       {
         startDate: '2026-09-11',
-        endDate: '2028-09-11',
-        venueIds: DOWNTOWN_VENUE_IDS
+        endDate: '2028-09-11'
       },
       'https://example.com/events'
     )
-    expect(
-      new URL(String(fetchMock.mock.calls[0]![0])).searchParams.get('venue')
-    ).toBe(DOWNTOWN_VENUE_IDS.join(','))
+    const url = new URL(String(fetchMock.mock.calls[0]![0]))
+    expect(url.searchParams.get('end_date')).toBe('2028-09-11')
+    expect(url.searchParams.get('venue')).toBeNull()
   })
 
   it('wraps a network failure', async () => {

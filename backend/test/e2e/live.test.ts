@@ -83,4 +83,15 @@ describe.skipIf(!runE2E || !deployedUrl)('deployed feed', () => {
     const component = new ICAL.Component(ICAL.parse(await response.text()))
     expect(component.getAllSubcomponents('vevent').length).toBeGreaterThan(0)
   })
+
+  it('serves a deployed filtered DTSM view', async () => {
+    const response = await fetch(
+      new URL('/dtsm-events.ics?venues=999999999', deployedUrl!),
+      { headers: { 'User-Agent': 'calendars-smoke-test' } }
+    )
+    expect(response.status).toBe(200)
+    expect(response.headers.get('Cache-Control')).toBe('public, max-age=3600')
+    const component = new ICAL.Component(ICAL.parse(await response.text()))
+    expect(component.getAllSubcomponents('vevent')).toHaveLength(0)
+  })
 })

@@ -9,7 +9,13 @@ import {
   readSyncState,
   recordFailure
 } from './repository.js'
-import { DOWNTOWN_VENUE_IDS, fetchEvents } from './upstream.js'
+import type { EventFilter } from './repository.js'
+import {
+  dtsmResponseCacheExpirationTtl,
+  dtsmResponseCacheKey,
+  parseDtsmEventFilter
+} from './query.js'
+import { fetchEvents } from './upstream.js'
 
 const TIME_ZONE = 'America/Los_Angeles'
 
@@ -31,18 +37,17 @@ export function localDateTime(now: Date): string {
   return `${parts.year}-${parts.month}-${parts.day} ${parts.hour}:${parts.minute}:${parts.second}`
 }
 
-async function syncAndRead(db: D1Database, now: Date) {
+async function syncAndRead(db: D1Database, now: Date, filter: EventFilter) {
   const nowSeconds = Math.floor(now.getTime() / 1000)
   const state = await readSyncState(db)
-  const defaultFilter = { venueIds: DOWNTOWN_VENUE_IDS }
   if (state.next_attempt_at > nowSeconds) {
     if (state.last_success_at === null)
       throw new UpstreamError('DTSM events refresh is waiting to retry')
-    return readEvents(db, defaultFilter)
+    return readEvents(db, filter)
   }
 
   if (!(await acquireLease(db, nowSeconds))) {
-    const stored = await readEvents(db, defaultFilter)
+    const stored = await readEvents(db, filter)
     if (state.last_success_at !== null) return stored
     throw new UpstreamError('DTSM events refresh is already in progress')
   }
@@ -62,27 +67,29 @@ async function syncAndRead(db: D1Database, now: Date) {
     await recordFailure(db, nowSeconds, state.last_success_at !== null)
     if (state.last_success_at !== null) {
       console.warn('DTSM events refresh failed, serving stored events', error)
-      return readEvents(db, defaultFilter)
+      return readEvents(db, filter)
     }
     throw error instanceof UpstreamError
       ? error
       : new UpstreamError('DTSM events refresh failed')
   }
-  return readEvents(db, defaultFilter)
+  return readEvents(db, filter)
 }
 
 export default {
   path: calendarPaths.dtsmEvents,
   name: 'Downtown San Mateo Events',
-  cacheTtlSeconds: 24 * 60 * 60,
+  cacheTtlSeconds: 60 * 60,
   responseCache: {
-    key: 'dtsm-events.ics',
-    freshnessSeconds: 24 * 60 * 60
+    key: dtsmResponseCacheKey,
+    freshnessSeconds: 60 * 60,
+    expirationTtlSeconds: dtsmResponseCacheExpirationTtl
   },
 
-  async buildEvents(env: Env) {
+  async buildEvents(env: Env, request: Request) {
+    const { filter } = parseDtsmEventFilter(new URL(request.url).searchParams)
     try {
-      return buildEvents(await syncAndRead(env.CALENDAR_DB, new Date()))
+      return buildEvents(await syncAndRead(env.CALENDAR_DB, new Date(), filter))
     } catch (error: unknown) {
       if (error instanceof UpstreamError) throw error
       throw new UpstreamError('DTSM database unavailable')

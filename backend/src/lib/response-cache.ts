@@ -7,7 +7,7 @@ export interface ResponseCacheStore {
   put(
     key: string,
     value: string,
-    options?: { metadata?: unknown }
+    options?: { metadata?: unknown; expirationTtl?: number }
   ): Promise<void>
 }
 
@@ -15,6 +15,7 @@ export interface ResponseCacheOptions {
   store: ResponseCacheStore
   key: string
   freshnessSeconds: number
+  expirationTtlSeconds?: number
   label: string
   build: () => Promise<string>
 }
@@ -27,6 +28,7 @@ export async function withResponseCache({
   store,
   key,
   freshnessSeconds,
+  expirationTtlSeconds,
   label,
   build
 }: ResponseCacheOptions): Promise<string> {
@@ -52,7 +54,13 @@ export async function withResponseCache({
     const body = await build()
 
     try {
-      await store.put(key, body, { metadata: { cachedAt: Date.now() } })
+      const options: {
+        metadata: { cachedAt: number }
+        expirationTtl?: number
+      } = { metadata: { cachedAt: Date.now() } }
+      if (expirationTtlSeconds !== undefined)
+        options.expirationTtl = expirationTtlSeconds
+      await store.put(key, body, options)
     } catch (error: unknown) {
       console.warn(`${label} response cache write failed`, error)
     }

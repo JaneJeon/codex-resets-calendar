@@ -83,6 +83,31 @@ describe('DTSM normalized repository', () => {
     expect(await readEvents(db, { organizerIds: [701] })).toHaveLength(1)
     expect(await readEvents(db, { categoryIds: [81] })).toHaveLength(1)
     expect(await readEvents(db, { venueIds: [] })).toEqual([])
+    expect(await readEvents(db, { organizerIds: [] })).toEqual([])
+    expect(await readEvents(db, { categoryIds: [] })).toEqual([])
+    expect(
+      await readEvents(db, {
+        venueIds: [1201, 1137],
+        categoryIds: [81]
+      })
+    ).toHaveLength(1)
+    expect(
+      await readEvents(db, {
+        venueIds: [1201],
+        organizerIds: [701],
+        categoryIds: [80]
+      })
+    ).toHaveLength(1)
+    expect(
+      await readEvents(db, {
+        venueIds: [
+          ...Array.from({ length: 200 }, (_, index) => index + 10_000),
+          1201,
+          1137,
+          9999
+        ]
+      })
+    ).toHaveLength(3)
 
     const [event] = await readEvents(db, { venueIds: [1201] })
     expect(event).toMatchObject({

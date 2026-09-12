@@ -4,8 +4,6 @@ const BASE_URL = 'https://dsma.org/wp-json/tribe/events/v1/events'
 const PER_PAGE = 50
 const MAX_PAGES = 50
 
-export const DOWNTOWN_VENUE_IDS = [1201, 1249, 1260, 1328, 3999, 1137]
-
 export interface SourceEntity {
   id: number
   [key: string]: unknown
@@ -35,11 +33,10 @@ interface EventsResponse {
 export interface EventQuery {
   startDate: string
   endDate?: string
-  venueIds?: number[]
 }
 
 export async function fetchEvents(
-  { startDate, endDate, venueIds }: EventQuery,
+  { startDate, endDate }: EventQuery,
   baseUrl: string = BASE_URL
 ): Promise<SourceEvent[]> {
   const events: SourceEvent[] = []
@@ -50,9 +47,6 @@ export async function fetchEvents(
     if (endDate) url.searchParams.set('end_date', endDate)
     url.searchParams.set('per_page', String(PER_PAGE))
     url.searchParams.set('page', String(page))
-    if (venueIds && venueIds.length > 0)
-      url.searchParams.set('venue', venueIds.join(','))
-
     let response: Response
     try {
       response = await fetch(url)
