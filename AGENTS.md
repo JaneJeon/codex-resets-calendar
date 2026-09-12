@@ -39,6 +39,17 @@ successful response. Error responses always carry
 response is available, and anything else (for example `ics` rejecting
 an event) is a logged 500.
 
+Every production Worker response carries
+`Access-Control-Allow-Origin: https://cal.janejeon.com`. Under local Wrangler,
+the backend dev command overrides the `FRONTEND_ORIGIN` binding so it carries
+`Access-Control-Allow-Origin: http://localhost:5173` for the local Vite
+frontend. The explicit environment binding keeps each environment's response
+constant. Production never reflects arbitrary request origins, and its shared
+cache never mixes origin-specific variants. Both successful feeds and error
+responses carry the header. An ordinary GET is a simple CORS request and does
+not need an OPTIONS handler. Do not widen this to `*` merely because the feeds
+are public. Public fetchability and browser embedding are different policies.
+
 Reusable response-cache mechanics live in `backend/src/lib/response-cache.ts` and
 ICS serialization lives in `backend/src/lib/ics.ts`. Every calendar returns event
 attributes through `buildEvents`; a calendar can declaratively opt the shared
