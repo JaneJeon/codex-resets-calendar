@@ -8,17 +8,21 @@ export interface CalendarDefinition {
   name: string
   cacheTtlSeconds: number
   responseCache?: {
-    key: string
+    key: string | ((request: Request) => string | Promise<string>)
     freshnessSeconds: number
+    expirationTtlSeconds?:
+      | number
+      | ((request: Request) => number | undefined | Promise<number | undefined>)
   }
-  buildEvents(env: Env): Promise<CalendarEvent[]>
+  buildEvents(env: Env, request: Request): Promise<CalendarEvent[]>
 }
 
 // Every calendar the Worker serves. Each entry is
 // { path, name, cacheTtlSeconds, responseCache?, buildEvents() }, where
 // buildEvents always resolves to ics event attributes and throws UpstreamError
 // when its source fails. responseCache declaratively opts the serialized
-// calendar into retained-response caching.
+// calendar into retained-response caching; its key can vary by request when a
+// calendar exposes multiple views at one path.
 export const calendars: CalendarDefinition[] = [codexResets, dtsmEvents]
 
 export function findCalendar(pathname: string): CalendarDefinition | undefined {

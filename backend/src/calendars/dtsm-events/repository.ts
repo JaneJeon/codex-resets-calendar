@@ -5,7 +5,6 @@ import {
   exists,
   getTableColumns,
   gte,
-  inArray,
   isNull,
   lte,
   min,
@@ -353,7 +352,10 @@ export async function readEvents(
 
   const orm = drizzle(db)
   const conditions = [isNull(events.withdrawnAt)]
-  if (filter.venueIds) conditions.push(inArray(events.venueId, filter.venueIds))
+  if (filter.venueIds)
+    conditions.push(
+      sql`${events.venueId} IN (SELECT value FROM json_each(${JSON.stringify(filter.venueIds)}))`
+    )
   if (filter.organizerIds)
     conditions.push(
       exists(
@@ -363,7 +365,7 @@ export async function readEvents(
           .where(
             and(
               eq(eventOrganizers.eventId, events.id),
-              inArray(eventOrganizers.organizerId, filter.organizerIds)
+              sql`${eventOrganizers.organizerId} IN (SELECT value FROM json_each(${JSON.stringify(filter.organizerIds)}))`
             )
           )
       )
@@ -377,7 +379,7 @@ export async function readEvents(
           .where(
             and(
               eq(eventCategories.eventId, events.id),
-              inArray(eventCategories.categoryId, filter.categoryIds)
+              sql`${eventCategories.categoryId} IN (SELECT value FROM json_each(${JSON.stringify(filter.categoryIds)}))`
             )
           )
       )

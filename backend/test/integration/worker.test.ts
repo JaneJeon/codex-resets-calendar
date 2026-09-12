@@ -5,6 +5,7 @@ import statusEmptyFixture from '../fixtures/status-empty.json'
 import statusScheduledFixture from '../fixtures/status-scheduled.json'
 import statusWatchFixture from '../fixtures/status-watch.json'
 import dtsmFixture from '../fixtures/dtsm-events.json'
+import { dtsmResponseCacheKey } from '@/calendars/dtsm-events/query.js'
 
 function jsonResponse(body: unknown, init: ResponseInit = {}): Response {
   return new Response(JSON.stringify(body), {
@@ -20,9 +21,12 @@ function mockFetch(handler: typeof fetch): void {
 
 beforeEach(async () => {
   vi.restoreAllMocks()
+  const dtsmCache = await env.CALENDAR_CACHE.list({
+    prefix: 'dtsm-events.ics'
+  })
   await Promise.all([
     env.CALENDAR_CACHE.delete('codex-resets.ics'),
-    env.CALENDAR_CACHE.delete('dtsm-events.ics')
+    ...dtsmCache.keys.map(key => env.CALENDAR_CACHE.delete(key.name))
   ])
   await env.CALENDAR_DB.batch([
     env.CALENDAR_DB.prepare('DELETE FROM dtsm_event_organizers'),
@@ -52,7 +56,7 @@ describe('the Downtown San Mateo feed', () => {
       'http://example.com/dtsm-events.ics'
     )
     expect(response.status).toBe(200)
-    expect(response.headers.get('Cache-Control')).toBe('public, max-age=86400')
+    expect(response.headers.get('Cache-Control')).toBe('public, max-age=3600')
     const body = await response.text()
     expect(body).toContain('DTSTART:20260911T010000Z')
     expect(body).toContain('DTEND:20260911T030000Z')
@@ -69,26 +73,83 @@ describe('the Downtown San Mateo feed', () => {
     expect(count?.count).toBe(3)
   })
 
-  it('uses the stable KV key and then fresh D1 state without another source request', async () => {
+  it('isolates canonical filter variants in KV and reuses fresh D1 state', async () => {
     mockFetch(async () => jsonResponse(dtsmFixture))
-    const first = await exports.default.fetch(
+    const defaultResponse = await exports.default.fetch(
       'http://example.com/dtsm-events.ics'
     )
-    const body = await first.text()
+    const defaultBody = await defaultResponse.text()
     const fetchMock = vi.mocked(fetch)
     fetchMock.mockClear()
 
-    const kvHit = await exports.default.fetch(
-      'http://example.com/dtsm-events.ics?different=edge-key'
+    const filteredRequest = new Request(
+      'http://example.com/dtsm-events.ics?venues=1201'
     )
-    expect(await kvHit.text()).toBe(body)
+    const filtered = await exports.default.fetch(filteredRequest)
+    const filteredBody = await filtered.text()
+    expect(filteredBody).toContain('September Nights')
+    expect(filteredBody).not.toContain('Month-long Art Walk')
+    expect(filteredBody).not.toBe(defaultBody)
+    expect(fetchMock).not.toHaveBeenCalled()
+    const filteredKey = await dtsmResponseCacheKey(filteredRequest)
+    expect(await env.CALENDAR_CACHE.get(filteredKey)).toBe(filteredBody)
+    expect(await env.CALENDAR_CACHE.get('dtsm-events.ics')).toBe(defaultBody)
+
+    const canonicalHit = await exports.default.fetch(
+      'http://example.com/dtsm-events.ics?venues=1201,1201'
+    )
+    expect(await canonicalHit.text()).toBe(filteredBody)
     expect(fetchMock).not.toHaveBeenCalled()
 
     await env.CALENDAR_CACHE.delete('dtsm-events.ics')
     const d1Hit = await exports.default.fetch(
       'http://example.com/dtsm-events.ics'
     )
-    expect(await d1Hit.text()).toBe(body)
+    expect(await d1Hit.text()).toBe(defaultBody)
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('filters a custom URL against the full catalog without filtering upstream', async () => {
+    mockFetch(async input => {
+      const url = new URL(String(input))
+      expect(url.searchParams.get('venue')).toBeNull()
+      expect(url.searchParams.get('organizers')).toBeNull()
+      expect(url.searchParams.get('categories')).toBeNull()
+      return jsonResponse(dtsmFixture)
+    })
+
+    const response = await exports.default.fetch(
+      'http://example.com/dtsm-events.ics?venues=1201,1137&categories=81'
+    )
+    expect(response.status).toBe(200)
+    const body = await response.text()
+    expect(body).toContain('Month-long Art Walk')
+    expect(body).not.toContain('September Nights')
+    expect(body).not.toContain('Stored but not in the default feed')
+  })
+
+  it('returns a valid empty calendar when well-formed IDs match nothing', async () => {
+    mockFetch(async () => jsonResponse(dtsmFixture))
+
+    const response = await exports.default.fetch(
+      'http://example.com/dtsm-events.ics?organizers=999999'
+    )
+    const body = await response.text()
+    expect(response.status).toBe(200)
+    expect(body).toContain('BEGIN:VCALENDAR')
+    expect(body).not.toContain('BEGIN:VEVENT')
+  })
+
+  it('rejects malformed or unknown filter parameters without touching storage', async () => {
+    const fetchMock = vi.fn(async () => jsonResponse(dtsmFixture))
+    mockFetch(fetchMock)
+
+    const response = await exports.default.fetch(
+      'http://example.com/dtsm-events.ics?venue=1201'
+    )
+    expect(response.status).toBe(400)
+    expect(response.headers.get('Cache-Control')).toBe('no-store')
+    expect(await response.text()).toContain('unknown parameter venue')
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
@@ -127,7 +188,7 @@ describe('the Downtown San Mateo feed', () => {
     ).toBe('2026-09-01')
   })
 
-  it('serves stored rows and records a full-day backoff after refresh failure', async () => {
+  it('serves filter-matching stored rows and records a full-day backoff after refresh failure', async () => {
     mockFetch(async () => jsonResponse(dtsmFixture))
     await exports.default.fetch('http://example.com/dtsm-events.ics')
     await env.CALENDAR_CACHE.delete('dtsm-events.ics')
@@ -138,10 +199,12 @@ describe('the Downtown San Mateo feed', () => {
     mockFetch(async () => new Response('down', { status: 503 }))
 
     const response = await exports.default.fetch(
-      'http://example.com/dtsm-events.ics'
+      'http://example.com/dtsm-events.ics?venues=9999'
     )
     expect(response.status).toBe(200)
-    expect(await response.text()).toContain('September Nights')
+    const body = await response.text()
+    expect(body).toContain('Stored but not in the default feed')
+    expect(body).not.toContain('September Nights')
     expect(warning).toHaveBeenCalledWith(
       'DTSM events refresh failed, serving stored events',
       expect.any(Error)

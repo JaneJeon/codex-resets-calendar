@@ -17,10 +17,11 @@ const baseCalendar: CalendarDefinition = {
     }
   ]
 }
+const request = new Request('https://example.com/test.ics')
 
 describe('buildCalendarBody', () => {
   it('serializes events for a calendar without a custom response builder', async () => {
-    const body = await buildCalendarBody(baseCalendar, {} as Env)
+    const body = await buildCalendarBody(baseCalendar, {} as Env, request)
 
     expect(body).toContain('X-WR-CALNAME:Test Calendar')
     expect(body).toContain('SUMMARY:Test event')
@@ -40,7 +41,8 @@ describe('buildCalendarBody', () => {
         responseCache: { key: 'test.ics', freshnessSeconds: 3600 },
         buildEvents
       },
-      testEnv
+      testEnv,
+      request
     )
 
     expect(body).toContain('SUMMARY:Test event')
@@ -50,10 +52,46 @@ describe('buildCalendarBody', () => {
     })
   })
 
+  it('resolves a request-derived retained-response cache key', async () => {
+    const store: ResponseCacheStore = {
+      getWithMetadata: vi.fn(async () => ({ value: null, metadata: null })),
+      put: vi.fn(async () => {})
+    }
+    const key = vi.fn(async (value: Request) => {
+      return `test.ics:${new URL(value.url).searchParams.get('view')}`
+    })
+
+    await buildCalendarBody(
+      {
+        ...baseCalendar,
+        responseCache: {
+          key,
+          freshnessSeconds: 3600,
+          expirationTtlSeconds: async () => 30 * 24 * 60 * 60
+        }
+      },
+      { CALENDAR_CACHE: store } as unknown as Env,
+      new Request('https://example.com/test.ics?view=custom')
+    )
+
+    expect(key).toHaveBeenCalledOnce()
+    expect(store.put).toHaveBeenCalledWith(
+      'test.ics:custom',
+      expect.any(String),
+      {
+        metadata: { cachedAt: expect.any(Number) },
+        expirationTtl: 30 * 24 * 60 * 60
+      }
+    )
+  })
+
   it('turns an unavailable D1 binding into an upstream error', async () => {
     const calendar = calendars.find(value => value.path === '/dtsm-events.ics')!
-    await expect(calendar.buildEvents({} as Env)).rejects.toThrow(
-      'DTSM database unavailable'
-    )
+    await expect(
+      calendar.buildEvents(
+        {} as Env,
+        new Request('https://example.com/dtsm-events.ics')
+      )
+    ).rejects.toThrow('DTSM database unavailable')
   })
 })

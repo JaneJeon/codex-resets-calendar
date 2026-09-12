@@ -15,3 +15,11 @@ export class UpstreamError extends Error {
     this.retryAfter = options.retryAfter
   }
 }
+
+// A calendar request is syntactically invalid. The router turns it into a 400.
+export class InvalidRequestError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = 'InvalidRequestError'
+  }
+}

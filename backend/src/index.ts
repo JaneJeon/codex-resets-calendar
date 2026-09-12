@@ -1,5 +1,5 @@
 import { findCalendar, type CalendarDefinition } from '@/calendars/index.js'
-import { UpstreamError } from '@/errors.js'
+import { InvalidRequestError, UpstreamError } from '@/errors.js'
 import { serializeCalendar } from '@/lib/ics.js'
 import { withResponseCache } from '@/lib/response-cache.js'
 
@@ -17,16 +17,29 @@ function feedResponse(body: string, cacheTtlSeconds: number): Response {
 
 export async function buildCalendarBody(
   calendar: CalendarDefinition,
-  env: Env
+  env: Env,
+  request: Request
 ): Promise<string> {
   const build = async () =>
-    serializeCalendar(await calendar.buildEvents(env), { name: calendar.name })
+    serializeCalendar(await calendar.buildEvents(env, request), {
+      name: calendar.name
+    })
 
-  return calendar.responseCache
+  const cacheKey = calendar.responseCache?.key
+  const resolvedCacheKey =
+    typeof cacheKey === 'function' ? await cacheKey(request) : cacheKey
+  const expirationTtl = calendar.responseCache?.expirationTtlSeconds
+  const resolvedExpirationTtl =
+    typeof expirationTtl === 'function'
+      ? await expirationTtl(request)
+      : expirationTtl
+
+  return calendar.responseCache && resolvedCacheKey
     ? withResponseCache({
         store: env.CALENDAR_CACHE,
-        key: calendar.responseCache.key,
+        key: resolvedCacheKey,
         freshnessSeconds: calendar.responseCache.freshnessSeconds,
+        expirationTtlSeconds: resolvedExpirationTtl,
         label: calendar.name,
         build
       })
@@ -43,9 +56,12 @@ export default {
     }
 
     try {
-      const body = await buildCalendarBody(calendar, env)
+      const body = await buildCalendarBody(calendar, env, request)
       return feedResponse(body, calendar.cacheTtlSeconds)
     } catch (error: unknown) {
+      if (error instanceof InvalidRequestError) {
+        return new Response(error.message, { status: 400, headers: NO_STORE })
+      }
       if (error instanceof UpstreamError) {
         return new Response('Upstream unavailable', {
           status: 502,
