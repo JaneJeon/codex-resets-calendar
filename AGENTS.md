@@ -62,8 +62,12 @@ ended history: records accumulate only as the Worker sees them. Ended records
 are retained without being fetched again; future records missing from a
 successful snapshot are marked withdrawn. A D1 lease prevents concurrent
 requests from multiplying source traffic. The default feed filters in D1 by
-the six configured B Street and Central Park venue IDs. Source `image` objects
-are never normalized or persisted.
+the six configured B Street and Central Park venue IDs when no query is
+present. Filtered URLs accept comma-separated positive IDs in `venues`,
+`organizers`, and `categories`. IDs within a parameter are ORed; supplied
+parameters are ANDed; omitted parameters are unconstrained. Any query filter
+selects from the full stored catalog, never from a filtered upstream request.
+Source `image` objects are never normalized or persisted.
 
 DSMA `start_date` and `end_date` are authoritative
 `America/Los_Angeles` wall times. Ignore the API's inconsistent timezone and
@@ -82,7 +86,10 @@ per RFC 9111. Without that block, the header alone caches nothing,
 because a Worker runs in front of the zone cache. The cache key is the
 request path and query string plus the Worker version, not the host:
 every deploy starts cold, and all hostnames share one cache. Codex
-resets is cached for 15 minutes. Sources:
+resets is cached for 15 minutes. Every DTSM response is cached for one hour,
+while the shared D1 catalog refreshes from DSMA at most daily. The default DTSM
+KV fallback is retained indefinitely. Custom-filter KV variants expire after
+30 inactive days, while regularly polled subscriptions renew them. Sources:
 https://developers.cloudflare.com/workers/cache/configuration/ and
 https://developers.cloudflare.com/workers/cache/cache-keys/.
 
