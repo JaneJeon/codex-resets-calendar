@@ -33,7 +33,7 @@
     "npm-run-all2": "^9.0.3",
     "nx": "^23.2.1",
     "prettier": "^3.3.3",
-    "typescript": "^5.7.2",
+    "typescript": "^7.0.0",
     "vitest": "^4.1.0"
   },
   "allowScripts": {
