@@ -39,6 +39,12 @@ successful response. Error responses always carry
 response is available, and anything else (for example `ics` rejecting
 an event) is a logged 500.
 
+Every Worker response carries `Access-Control-Allow-Origin: *`. The feeds are
+public and credential-free, and the frontend is served from the separate
+`cal.janejeon.com` origin, so its browser-side calendar preview must be able to
+read both successful feeds and error responses. Its ordinary GET is a simple
+CORS request and does not need an OPTIONS handler.
+
 Reusable response-cache mechanics live in `backend/src/lib/response-cache.ts` and
 ICS serialization lives in `backend/src/lib/ics.ts`. Every calendar returns event
 attributes through `buildEvents`; a calendar can declaratively opt the shared
